@@ -89,6 +89,14 @@ class Instruction:
         self.addr = addr
         self.words: List[int] = []  # binary code (list of 32-bit words)
 
+class DataItem:
+    """Saves information about element of data section for second pass."""
+    def __init__(self, kind: str, addr: int):
+        self.kind = kind          # 'db', 'dw' или 'pstr'
+        self.addr = addr          # address of this element's start
+        self.values: List = []    # for db/dw: numbers list (int or str for labels)
+        # for pstr: list from one element - line
+
 class Program:
     """Parse result: list of instructions/data and labels table."""
     def __init__(self):
@@ -98,6 +106,7 @@ class Program:
         self.code_addr: int = 0
         self.symbols: Dict[str, int] = {}       # labels -> address (for code) or offset in data
         self.data_symbols: Dict[str, int] = {}  # labels in data section -> address
+        self.data_items: List[DataItem] = []    # elements of data section
 
 
 def _calc_instr_size(mnemonic: str, operands: List[Operand]) -> int:
@@ -290,28 +299,28 @@ class Parser:
                 if t.kind == 'directive':
                     directive = t.value
                     tok.next()
+                    item = DataItem(directive, addr)
                     if directive == 'db':
-                        # db value, ...
                         while tok.peek() is not None:
-                            self._parse_expression(tok)
-                            addr += 1  # each value uses word
+                            # Parse expression without computation, if label — save token as string
+                            self._parse_data_operand(tok, item)
+                            addr += 1
                             if tok.maybe('comma') is None:
                                 break
                     elif directive == 'dw':
                         while tok.peek() is not None:
-                            self._parse_expression(tok)
+                            self._parse_data_operand(tok, item)
                             addr += 1
                             if tok.maybe('comma') is None:
                                 break
                     elif directive == 'pstr':
-                        # pstr "string"
                         str_tok = tok.expect('string')
-                        s = str_tok.value[1:-1]  # remove quotes
-                        # format: first word — length then symbols words
-                        length = len(s)
-                        addr += 1 + length  # length + symbols
+                        s = str_tok.value[1:-1]
+                        item.values.append(s)
+                        addr += 1 + len(s)
                     else:
                         raise SyntaxError(f"Unknown data directive: {directive}")
+                    self.program.data_items.append(item)
                 continue
 
             # In code section: instructions
@@ -439,6 +448,38 @@ class Parser:
             val = self._parse_expression(tok)
             return -val
         raise SyntaxError(f"Expected number in expression, got {t}")
+
+    def _parse_data_operand(self, tok: Tokenizer, item: DataItem):
+        """Saves numeric value or label name into data element."""
+        t = tok.peek()
+        if t is None:
+            raise SyntaxError("Expected data operand")
+        if t.kind == 'minus':
+            tok.next()
+            # After minus there must be a number or an identifier
+            nt = tok.peek()
+            if nt is None or nt.kind not in ('number', 'ident'):
+                raise SyntaxError("Expected number or identifier after '-'")
+            self._parse_expression(tok)
+            if nt.kind == 'ident':
+                tok.next()  # съедаем ident
+                item.values.append(f"-{nt.value}")  # save as string
+            else:
+                # число
+                tok.next()
+                val = _eval_token_value(nt)
+                item.values.append(-val)
+            return
+        elif t.kind == 'number':
+            tok.next()
+            item.values.append(_eval_token_value(t))
+        elif t.kind == 'ident':
+            tok.next()
+            item.values.append(t.value)  # save as string label name
+        elif t.kind == 'string':
+            raise SyntaxError("Unexpected string in data directive")
+        else:
+            raise SyntaxError(f"Unexpected token in data directive: {t}")
 
     def _second_pass(self):
         """Generates binary for all instructions using symbols."""
