@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Union
 from isa import (
     encode_opcode, encode_size, encode_reg,
     build_opcode_word,
@@ -72,8 +72,10 @@ class Tokenizer:
 
 class Operand:
     """Stores information about instruction operand."""
-    def __init__(self, mode: str, reg: Optional[str] = None, imm: Optional[int] = None,
-                 disp: Optional[int] = None, abs_addr: Optional[int] = None):
+    def __init__(self, mode: str, reg: Optional[str] = None,
+                 imm: Union[int, str, None] = None,
+                 disp: Union[int, str, None] = None,
+                 abs_addr: Union[int, str, None] = None):
         self.mode = mode          # 'imm', 'reg', 'indirect', 'postinc', 'predec', 'displacement', 'absolute'
         self.reg = reg            # name of the register or None
         self.imm = imm            # immediate value (if mode=='imm')
@@ -128,8 +130,8 @@ def _calc_instr_size(mnemonic: str, operands: List[Operand]) -> int:
     return words
 
 
-def _eval_token_value(tok: Token) -> int:
-    """Converts number's or identifier's token into integer (for first pass — numbers only)."""
+def _eval_token_value(tok: Token) -> Union[int, str]:
+    """Converts number's or identifier's token"""
     if tok.kind == 'number':
         if tok.value.startswith('0x'):
             return int(tok.value, 16)
@@ -138,8 +140,7 @@ def _eval_token_value(tok: Token) -> int:
         else:
             return int(tok.value)
     elif tok.kind == 'ident':
-        # TODO: identifiers convert
-        return 0
+        return tok.value  # save label's name as string
     else:
         raise SyntaxError(f"Cannot evaluate token {tok}")
 
@@ -150,7 +151,7 @@ def _operand_to_field(op: Operand, words_ext: List[int]) -> int:
     """
     if op.mode == 'imm' and op.imm is not None:
         field = MODE_IMMEDIATE | 0
-        words_ext.append(op.imm)  # 32-bit value
+        words_ext.append(int(op.imm))  # 32-bit value
     elif op.mode == 'reg' and op.reg is not None:
         field = MODE_REGISTER_DIRECT | encode_reg(op.reg)
     elif op.mode == 'indirect' and op.reg is not None:
@@ -168,11 +169,11 @@ def _operand_to_field(op: Operand, words_ext: List[int]) -> int:
     elif op.mode == 'displacement' and op.disp is not None and op.reg is not None:
         field = MODE_SPECIAL | SPECIAL_DISPLACEMENT
         # extended word: bits [19:16] — register, [15:0] — signed shift
-        ext_word = (encode_reg(op.reg) << 16) | (op.disp & 0xFFFF)
+        ext_word = (encode_reg(op.reg) << 16) | (int(op.disp) & 0xFFFF)
         words_ext.append(ext_word)
     elif op.mode == 'absolute' and op.abs_addr is not None:
         field = MODE_SPECIAL | SPECIAL_ABSOLUTE
-        words_ext.append(op.abs_addr)  # full 32-bit address
+        words_ext.append(int(op.abs_addr))  # full 32-bit address
     else:
         raise ValueError(f"Unknown operand mode: {op.mode}")
     return field
@@ -291,7 +292,7 @@ class Parser:
             # .org
             if t.kind == 'directive' and t.value == '.org':
                 tok.next()
-                addr = self._parse_expression(tok)
+                addr = self._parse_expression_int(tok)
                 continue
 
             # In data section: directives db, dw, pstr
@@ -329,7 +330,6 @@ class Parser:
                 mnemonic, size, operands = self._parse_instruction(tok)
                 instr_size = _calc_instr_size(mnemonic, operands)
                 # Write information for second pass
-                # Пока сохраняем только адрес, инструкцию сохраним во втором проходе
                 self.program.code.append(Instruction(mnemonic, size, operands, addr))
                 addr += instr_size
                 continue
@@ -424,7 +424,13 @@ class Parser:
                 disp_tok = tok.next()  # already number/identifier
 
             if disp_tok is not None:
-                disp = _eval_token_value(disp_tok) * disp_sign
+                disp_val = _eval_token_value(disp_tok)
+                if isinstance(disp_val, str) and disp_sign == -1:
+                    disp = f"-{disp_val}"
+                elif isinstance(disp_val, int):
+                    disp = disp_val * disp_sign
+                else:
+                    disp = disp_val  # string without minus
                 tok.expect('lparen')
                 reg_tok = tok.expect('reg')
                 reg = reg_tok.value
@@ -433,7 +439,13 @@ class Parser:
 
         return None
 
-    def _parse_expression(self, tok: Tokenizer) -> int:
+    def _parse_expression_int(self, tok: Tokenizer) -> int:
+        val = self._parse_expression(tok)
+        if isinstance(val, int):
+            return val
+        raise SyntaxError(f"Expected a number, got identifier '{val}'")
+
+    def _parse_expression(self, tok: Tokenizer) -> Union[int, str]:
         """Processes simple expression: term + term - term ... (no brackets).
         All computations immediate, no labels (label are processed in second pass).
         In first pass expression can't contain labels, numbers only.
@@ -445,8 +457,16 @@ class Parser:
         # If there is unary minus
         if t and t.kind == 'minus':
             tok.next()
-            val = self._parse_expression(tok)
-            return -val
+            nt = tok.peek()
+            if nt and nt.kind == 'ident':
+                tok.next()
+                return f"-{nt.value}"   # save as string with minus
+            else:
+                val = self._parse_expression(tok)
+                if isinstance(val, int):
+                    return -val
+                # if string here
+                raise SyntaxError("Cannot negate a label")
         raise SyntaxError(f"Expected number in expression, got {t}")
 
     def _parse_data_operand(self, tok: Tokenizer, item: DataItem):
@@ -454,32 +474,9 @@ class Parser:
         t = tok.peek()
         if t is None:
             raise SyntaxError("Expected data operand")
-        if t.kind == 'minus':
-            tok.next()
-            # After minus there must be a number or an identifier
-            nt = tok.peek()
-            if nt is None or nt.kind not in ('number', 'ident'):
-                raise SyntaxError("Expected number or identifier after '-'")
-            self._parse_expression(tok)
-            if nt.kind == 'ident':
-                tok.next()  # съедаем ident
-                item.values.append(f"-{nt.value}")  # save as string
-            else:
-                # число
-                tok.next()
-                val = _eval_token_value(nt)
-                item.values.append(-val)
-            return
-        elif t.kind == 'number':
-            tok.next()
-            item.values.append(_eval_token_value(t))
-        elif t.kind == 'ident':
-            tok.next()
-            item.values.append(t.value)  # save as string label name
-        elif t.kind == 'string':
-            raise SyntaxError("Unexpected string in data directive")
-        else:
-            raise SyntaxError(f"Unexpected token in data directive: {t}")
+        # Use _parse_expression
+        val = self._parse_expression(tok)
+        item.values.append(val)
 
     def _second_pass(self):
         """Generates binary for all instructions using symbols."""
