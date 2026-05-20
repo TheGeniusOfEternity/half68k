@@ -23,36 +23,41 @@ def generate_log(program, log_path: Path) -> None:
     Format: <address> - <HEXCODE> - <mnemonic>
     """
     lines = []
-    # Data
-    for addr, word in enumerate(program.data, start=0):
+    # Data section (DATA)
+    for offset, word in enumerate(program.data):
         hex_str = format_hex_word(word)
-        lines.append(f"{addr:08X} - {hex_str} - data")
-    # Code
+        lines.append(f"DATA {offset:08X} - {hex_str}")
+    # Code section (CODE)
     for instr in program.code:
         for i, word in enumerate(instr.words):
             addr = instr.addr + i
             hex_str = format_hex_word(word)
-            # Use mnemonics only for first word of the instruction
             mnem = instr.mnemonic if i == 0 else ""
-            lines.append(f"{addr:08X} - {hex_str} - {mnem}")
+            lines.append(f"CODE {addr:08X} - {hex_str} - {mnem}")
     with open(log_path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
 
 def write_binary(program, bin_path: Path) -> None:
     """
-    Saves binary file: sequence of 32-bit words in little-endian.
-    Order: data first, then code.
+    Saves binary fil in format:
+    [4 bytes: size of 'data' in words (little-endian)]
+    [data: words of data]
+    [code: words of instructions]
     """
-    words = []
-    # Data
-    words.extend(program.data)
-    # Code (all words of all instructions)
+    data_words = program.data
+    code_words = []
     for instr in program.code:
-        words.extend(instr.words)
+        code_words.extend(instr.words)
 
     with open(bin_path, "wb") as f:
-        for word in words:
+        # Header: amount of data words
+        f.write(struct.pack("<I", len(data_words)))
+        # Data
+        for word in data_words:
+            f.write(struct.pack("<I", word))
+        # Code
+        for word in code_words:
             f.write(struct.pack("<I", word))
 
 
