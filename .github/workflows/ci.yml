@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff mypy
+
+      - name: Run Ruff (linter)
+        run: ruff check .
+
+      - name: Run Mypy (type checking)
+        run: mypy .
+
+      - name: Run Translator Golden Tests
+        run: |
+          mkdir -p tests/hello tests/cat tests/hello_user_name tests/sort tests/prob1 tests/double_precision tests/features
+          for asm_file in tests/**/*.asm; do
+            echo "Compiling $asm_file"
+            python translator.py "$asm_file" "${asm_file%.asm}.bin"
+            # compare .log with с true golden.log
+            if [ -f "${asm_file%.asm}.golden.log" ]; then
+              diff "${asm_file%.asm}.bin.log" "${asm_file%.asm}.golden.log" || exit 1
+            fi
+          done

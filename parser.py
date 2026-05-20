@@ -1,57 +1,79 @@
 import re
-from typing import List, Dict, Tuple, Optional, Union
+
 from isa import (
-    encode_opcode, encode_size, encode_reg,
+    MODE_IMMEDIATE,
+    MODE_REGISTER_DIRECT,
+    MODE_REGISTER_INDIRECT,
+    MODE_SPECIAL,
+    NO_SIZE_MNEMONICS,
+    SPECIAL_ABSOLUTE,
+    SPECIAL_DISPLACEMENT,
+    SPECIAL_POSTINC,
+    SPECIAL_PREDEC,
     build_opcode_word,
-    MODE_IMMEDIATE, MODE_REGISTER_DIRECT, MODE_REGISTER_INDIRECT, MODE_SPECIAL,
-    SPECIAL_POSTINC, SPECIAL_PREDEC, SPECIAL_DISPLACEMENT, SPECIAL_ABSOLUTE, NO_SIZE_MNEMONICS
+    encode_opcode,
+    encode_reg,
+    encode_size,
 )
 
 # Regular expression for string tokenization
-TOKEN_RE = re.compile(r'''
-    (?P<label>^[A-Za-z_]\w*:)                       # label
-    |(?P<mnemonic>mv|add|sub|cmp|mul|div|and|or|xor|clr|neg|not|asl|asr|lsl|lsr|jmp|jsr|rts|die|bcc|bcs|beq|bne|bmi|bpl|bvs|bvc|blt|ble|bgt|bge)(?=\s|$|\.)  # мнемоника
-    |(?P<size>\.[bl])                            # size .b or .l
-    |(?P<comma>,)                                   # comma
-    |(?P<directive>db|dw|pstr|\.org|\.data|\.code)  # directives
-    |(?P<number>0x[0-9a-fA-F]+|0b[01]+|\d+)         # numbers
-    |(?P<reg>R[0-6]|SP)                             # registers
-    |(?P<immediate>\#)                              # immediate operand symbol
-    |(?P<lparen>\()                                 # opening bracket
-    |(?P<rparen>\))                                 # closing bracket
-    |(?P<plus>\+)                                   # plus (for shifts и post-increment)
-    |(?P<minus>-)                                   # minus (for expressions and pre-decrement)
-    |(?P<ident>[A-Za-z_]\w*)                        # identifier (label, constand)
-    |(?P<string>"[^"]*")                            # string in quotes
-    |(?P<comment>;.*)                               # comment
-    |(?P<whitespace>\s+)                            # spaces (ingnore)
-''', re.VERBOSE)
+TOKEN_RE = re.compile(
+    r"""
+    (?P<label>^[A-Za-z_]\w*:)                               # label
+    |(?P<mnemonic>                                          # mnemonic
+        mv|add|sub|cmp|mul|div
+        |and|or|xor
+        |clr|neg|not
+        |asl|asr|lsl|lsr
+        |jmp|jsr|rts|die
+        |bcc|bcs|beq|bne|bmi|bpl|bvs|bvc|blt|ble|bgt|bge
+    )(?=\s|$|\.)
+    |(?P<size>\.[bl])                                       # size .b or .l
+    |(?P<comma>,)                                           # comma
+    |(?P<directive>db|dw|pstr|\.org|\.data|\.code)          # directives
+    |(?P<number>0x[0-9a-fA-F]+|0b[01]+|\d+)                 # numbers
+    |(?P<reg>R[0-6]|SP)                                     # registers
+    |(?P<immediate>\#)                                      # immediate operand symbol
+    |(?P<lparen>\()                                         # opening bracket
+    |(?P<rparen>\))                                         # closing bracket
+    |(?P<plus>\+)                                           # plus (for shifts и post-increment)
+    |(?P<minus>-)                                           # minus (for expressions and pre-decrement)
+    |(?P<ident>[A-Za-z_]\w*)                                # identifier (label, constand)
+    |(?P<string>"[^"]*")                                    # string in quotes
+    |(?P<comment>;.*)                                       # comment
+    |(?P<whitespace>\s+)                                    # spaces (ingnore)
+""",
+    re.VERBOSE,
+)
 
 
 class Token:
-    def __init__(self, kind, value, pos):
+    def __init__(self, kind: str, value: str, pos: int) -> None:
         self.kind = kind
         self.value = value
         self.pos = pos
 
+
 class Tokenizer:
     """Splits string into tokens via regular expression."""
+
     def __init__(self, line: str):
         self.tokens = []
         for m in TOKEN_RE.finditer(line):
             kind = m.lastgroup
             value = m.group()
-            if kind == 'whitespace' or kind == 'comment':
-                continue  # пропускаем
+            if kind in ["whitespace", "comment"]:
+                continue  # skip
+            assert kind is not None
             self.tokens.append(Token(kind, value, m.start()))
         self.pos = 0
 
-    def peek(self) -> Optional[Token]:
+    def peek(self) -> Token | None:
         if self.pos < len(self.tokens):
             return self.tokens[self.pos]
         return None
 
-    def next(self) -> Optional[Token]:
+    def next(self) -> Token | None:
         tok = self.peek()
         if tok:
             self.pos += 1
@@ -63,7 +85,7 @@ class Tokenizer:
             raise SyntaxError(f"Expected {kind}, got {tok}")
         return tok
 
-    def maybe(self, kind: str) -> Optional[Token]:
+    def maybe(self, kind: str) -> Token | None:
         peek = self.peek()
         if peek and peek.kind == kind:
             return self.next()
@@ -72,113 +94,116 @@ class Tokenizer:
 
 class Operand:
     """Stores information about instruction operand."""
-    def __init__(self, mode: str, reg: Optional[str] = None,
-                 imm: Union[int, str, None] = None,
-                 disp: Union[int, str, None] = None,
-                 abs_addr: Union[int, str, None] = None):
-        self.mode = mode          # 'imm', 'reg', 'indirect', 'postinc', 'predec', 'displacement', 'absolute'
-        self.reg = reg            # name of the register or None
-        self.imm = imm            # immediate value (if mode=='imm')
-        self.disp = disp          # shift (for displacement)
+
+    def __init__(self, mode: str, reg: str | None = None, imm: int | str | None = None, disp: int | str | None = None, abs_addr: int | str | None = None):
+        self.mode = mode  # 'imm', 'reg', 'indirect', 'postinc', 'predec', 'displacement', 'absolute'
+        self.reg = reg  # name of the register or None
+        self.imm = imm  # immediate value (if mode=='imm')
+        self.disp = disp  # shift (for displacement)
         self.abs_addr = abs_addr  # absolute address
+
 
 class Instruction:
     """Describes a single machine instruction."""
-    def __init__(self, mnemonic: str, size: str, operands: List[Operand], addr: int):
+
+    def __init__(self, mnemonic: str, size: str, operands: list[Operand], addr: int):
         self.mnemonic = mnemonic
         self.size = size
         self.operands = operands
         self.addr = addr
-        self.words: List[int] = []  # binary code (list of 32-bit words)
+        self.words: list[int] = []  # binary code (list of 32-bit words)
+
 
 class DataItem:
     """Saves information about the element of the data section for the second pass."""
-    def __init__(self, kind: str, addr: int):
-        self.kind = kind          # 'db', 'dw' или 'pstr'
-        self.addr = addr          # address of this element's start
-        self.values: List = []    # for db/dw: numbers list (int or str for labels)
+
+    def __init__(self, kind: str, addr: int) -> None:
+        self.kind = kind  # 'db', 'dw' или 'pstr'
+        self.addr = addr  # address of this element's start
+        self.values: list[int | str] = []  # for db/dw: numbers list (int or str for labels)
         # for pstr: list from one element - line
+
 
 class Program:
     """Parse result: list of instructions/data and table of labels."""
-    def __init__(self):
-        self.code: List[Instruction] = []       # instructions (.code section)
-        self.data: List[int] = []               # flat data words list
-        self.data_addr: int = 0                 # start data address (set by .org)
+
+    def __init__(self) -> None:
+        self.code: list[Instruction] = []  # instructions (.code section)
+        self.data: list[int] = []  # flat data words list
+        self.data_addr: int = 0  # start data address (set by .org)
         self.code_addr: int = 0
-        self.symbols: Dict[str, int] = {}       # labels -> address (for code) or offset in data
-        self.data_symbols: Dict[str, int] = {}  # labels in data section -> address
-        self.data_items: List[DataItem] = []    # elements of data section
+        self.symbols: dict[str, int] = {}  # labels -> address (for code) or offset in data
+        self.data_symbols: dict[str, int] = {}  # labels in data section -> address
+        self.data_items: list[DataItem] = []  # elements of data section
 
 
-def _calc_instr_size(mnemonic: str, operands: List[Operand]) -> int:
+def _calc_instr_size(mnemonic: str, operands: list[Operand]) -> int:
     """Computes length of instruction in words."""
     # Basic opcode word
     words = 1
     # Extensions for operands
     for op in operands:
-        if op.mode == 'imm':
+        if op.mode == "imm":
             words += 1  # 32-bit value
-        elif op.mode == 'displacement':
+        elif op.mode == "displacement":
             words += 1  # 16-bit shift (in separate word)
-        elif op.mode == 'absolute':
+        elif op.mode == "absolute":
             words += 1  # 32-bit address
         # postinc, predec, reg, indirect — without extensions
     # For transitions (jmp, jsr, bc*) there is always 32-bit address
-    if mnemonic in ('jmp', 'jsr') or mnemonic.startswith('b'):
+    if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
         words += 1  # absolute address
     return words
 
 
-def _eval_token_value(tok: Token) -> Union[int, str]:
+def _eval_token_value(tok: Token) -> int | str:
     """Converts number's or identifier's token"""
-    if tok.kind == 'number':
-        if tok.value.startswith('0x'):
+    if tok.kind == "number":
+        if tok.value.startswith("0x"):
             return int(tok.value, 16)
-        elif tok.value.startswith('0b'):
+        if tok.value.startswith("0b"):
             return int(tok.value, 2)
-        else:
-            return int(tok.value)
-    elif tok.kind == 'ident':
+        return int(tok.value)
+    if tok.kind == "ident":
         return tok.value  # save label's name as string
-    else:
-        raise SyntaxError(f"Cannot evaluate token {tok}")
+    raise SyntaxError(f"Cannot evaluate token {tok}")
 
 
-def _operand_to_field(op: Operand, words_ext: List[int]) -> int:
+def _operand_to_field(op: Operand, words_ext: list[int]) -> int:
     """Encodes operand into 5-bit fields by adding extension words if required in words_ext.
     Returns 5-bit field for opcode.
     """
-    if op.mode == 'imm' and op.imm is not None:
+    if op.mode == "imm" and op.imm is not None:
         field = MODE_IMMEDIATE | 0
         words_ext.append(int(op.imm))  # 32-bit value
-    elif op.mode == 'reg' and op.reg is not None:
+    elif op.mode == "reg" and op.reg is not None:
         field = MODE_REGISTER_DIRECT | encode_reg(op.reg)
-    elif op.mode == 'indirect' and op.reg is not None:
+    elif op.mode == "indirect" and op.reg is not None:
         field = MODE_REGISTER_INDIRECT | encode_reg(op.reg)
-    elif op.mode == 'postinc' and op.reg is not None:
+    elif op.mode == "postinc" and op.reg is not None:
         field = MODE_SPECIAL | SPECIAL_POSTINC
         # Store register number in extended word
         # Scheme: bits [19:16] for register number, [15:0] — shift
         ext_word = (encode_reg(op.reg) << 16) & 0xF0000
         words_ext.append(ext_word)
-    elif op.mode == 'predec' and op.reg is not None:
+    elif op.mode == "predec" and op.reg is not None:
         field = MODE_SPECIAL | SPECIAL_PREDEC
         ext_word = (encode_reg(op.reg) << 16) & 0xF0000
         words_ext.append(ext_word)
-    elif op.mode == 'displacement' and op.disp is not None and op.reg is not None:
+    elif op.mode == "displacement" and op.disp is not None and op.reg is not None:
         field = MODE_SPECIAL | SPECIAL_DISPLACEMENT
         # extended word: bits [19:16] — register, [15:0] — signed shift
         ext_word = (encode_reg(op.reg) << 16) | (int(op.disp) & 0xFFFF)
         words_ext.append(ext_word)
-    elif op.mode == 'absolute' and op.abs_addr is not None:
+    elif op.mode == "absolute" and op.abs_addr is not None:
         field = MODE_SPECIAL | SPECIAL_ABSOLUTE
         words_ext.append(int(op.abs_addr))  # full 32-bit address
     else:
         raise ValueError(f"Unknown operand mode: {op.mode}")
     return field
 
-def _generate_instruction_words(instr: Instruction) -> List[int]:
+
+def _generate_instruction_words(instr: Instruction) -> list[int]:
     """Returns the list of 32-bit words for instruction."""
     words = []
     # Define operand mode and collect fields src/dst
@@ -191,7 +216,7 @@ def _generate_instruction_words(instr: Instruction) -> List[int]:
     ops = instr.operands
 
     # If instruction is flow controlling (jmp, jsr, bcc, ...) then format is different: opcode + 32-bit address
-    if mnemonic in ('jmp', 'jsr') or mnemonic.startswith('b'):
+    if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
         opcode = encode_opcode(mnemonic)
         sz = encode_size(size)  # размер не важен для переходов, но поле оставим
         # Fields src/dst are not used, reset
@@ -201,16 +226,21 @@ def _generate_instruction_words(instr: Instruction) -> List[int]:
         # Search operand with absolute address
         addr = 0
         for op in ops:
-            if op.mode == 'absolute':
-                addr = op.abs_addr
-            elif op.mode == 'imm':
-                addr = op.imm
-        # TODO: handle identifiers
+            if op.mode == "absolute":
+                if isinstance(op.abs_addr, int):
+                    addr = op.abs_addr
+                else:
+                    raise ValueError("Unresolved label in branch target")
+            elif op.mode == "imm":
+                if isinstance(op.imm, int):
+                    addr = op.imm
+                else:
+                    raise ValueError("Unresolved label in branch target")
         words.append(addr)
         return words
 
     # Instructions without operands (rts, die)
-    if mnemonic in ('rts', 'die'):
+    if mnemonic in ("rts", "die"):
         opcode = encode_opcode(mnemonic)
         sz = encode_size(size)
         word = (opcode << 26) | (sz << 25)
@@ -237,7 +267,7 @@ def _generate_instruction_words(instr: Instruction) -> List[int]:
 
 
 class Parser:
-    def __init__(self, lines: List[str]):
+    def __init__(self, lines: list[str]):
         self.lines = lines
         self.program = Program()
 
@@ -248,13 +278,13 @@ class Parser:
         self._second_pass()
         return self.program
 
-    def _first_pass(self):
+    def _first_pass(self) -> None:
         current_section = None  # 'data' or 'code'
-        addrs = {'data': 0, 'code': 0}  # independent address counters
+        addrs = {"data": 0, "code": 0}  # independent address counters
 
         for line in self.lines:
             stripped = line.strip()
-            if not stripped or stripped.startswith(';'):
+            if not stripped or stripped.startswith(";"):
                 continue
 
             tok = Tokenizer(stripped)
@@ -263,28 +293,28 @@ class Parser:
                 continue
 
             # Check if label
-            if t.kind == 'label':
+            if t.kind == "label":
                 label_name = t.value[:-1]  # remove ':'
                 tok.next()
                 if current_section is None:
                     raise SyntaxError(f"Label without section: {label_name}")
-                if current_section == 'data':
-                    self.program.data_symbols[label_name] = addrs['data']
-                elif current_section == 'code':
-                    self.program.symbols[label_name] = addrs['code']
+                if current_section == "data":
+                    self.program.data_symbols[label_name] = addrs["data"]
+                elif current_section == "code":
+                    self.program.symbols[label_name] = addrs["code"]
                 t = tok.peek()
                 if t is None:
                     continue
 
             # Check if directive
-            if t.kind == 'directive' and t.value in ('.data', '.code'):
+            if t.kind == "directive" and t.value in (".data", ".code"):
                 current_section = t.value[1:]
                 # don't reset counter on second entry, switch only
                 tok.next()
                 continue
 
             # .org
-            if t.kind == 'directive' and t.value == '.org':
+            if t.kind == "directive" and t.value == ".org":
                 tok.next()
                 new_addr = self._parse_expression_int(tok)
                 if current_section is None:
@@ -293,59 +323,59 @@ class Parser:
                 continue
 
             # In data section: directives db, dw, pstr
-            if current_section == 'data':
-                if t.kind == 'directive':
+            if current_section == "data":
+                if t.kind == "directive":
                     directive = t.value
                     tok.next()
-                    item = DataItem(directive, addrs['data'])
-                    if directive == 'db':
+                    item = DataItem(directive, addrs["data"])
+                    if directive == "db":
                         while tok.peek() is not None:
                             # Parse expression without computation, if label — save token as string
                             self._parse_data_operand(tok, item)
-                            addrs['data'] += 1
-                            if tok.maybe('comma') is None:
+                            addrs["data"] += 1
+                            if tok.maybe("comma") is None:
                                 break
-                    elif directive == 'dw':
+                    elif directive == "dw":
                         while tok.peek() is not None:
                             self._parse_data_operand(tok, item)
-                            addrs['data'] += 1
-                            if tok.maybe('comma') is None:
+                            addrs["data"] += 1
+                            if tok.maybe("comma") is None:
                                 break
-                    elif directive == 'pstr':
-                        str_tok = tok.expect('string')
+                    elif directive == "pstr":
+                        str_tok = tok.expect("string")
                         s = str_tok.value[1:-1]
                         item.values.append(s)
-                        addrs['data'] += 1 + len(s)
+                        addrs["data"] += 1 + len(s)
                     else:
                         raise SyntaxError(f"Unknown data directive: {directive}")
                     self.program.data_items.append(item)
                 continue
 
             # In code section: instructions
-            if current_section == 'code':
+            if current_section == "code":
                 # Define size of the instruction (based on operand modes)
                 mnemonic, size, operands = self._parse_instruction(tok)
                 instr_size = _calc_instr_size(mnemonic, operands)
-                self.program.code.append(Instruction(mnemonic, size, operands, addrs['code']))
-                addrs['code'] += instr_size
+                self.program.code.append(Instruction(mnemonic, size, operands, addrs["code"]))
+                addrs["code"] += instr_size
                 continue
 
             # If token was not matched
             raise SyntaxError(f"Unexpected token: {t}")
 
         # Remember max addresses
-        self.program.data_addr = addrs['data']
-        self.program.code_addr = addrs['code']
+        self.program.data_addr = addrs["data"]
+        self.program.code_addr = addrs["code"]
 
-    def _parse_instruction(self, tok: Tokenizer) -> Tuple[str, str, List[Operand]]:
+    def _parse_instruction(self, tok: Tokenizer) -> tuple[str, str, list[Operand]]:
         """Process mnemonics, size, operands."""
-        mnemonic_tok = tok.expect('mnemonic')
+        mnemonic_tok = tok.expect("mnemonic")
         mnemonic = mnemonic_tok.value
 
         if mnemonic in NO_SIZE_MNEMONICS:
-            size = 'l'  # mock size will be ignored
+            size = "l"  # mock size will be ignored
         else:
-            size_tok = tok.maybe('size')
+            size_tok = tok.maybe("size")
             if size_tok:
                 size = size_tok.value[1:]  # remove dot
             else:
@@ -353,9 +383,9 @@ class Parser:
 
         operands = []
         # For transition instructions (jmp, jsr, branches) operand is expression (absolute address)
-        if mnemonic in ('jmp', 'jsr') or mnemonic.startswith('b'):
+        if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
             val = self._parse_expression(tok)
-            operands.append(Operand(mode='absolute', abs_addr=val))
+            operands.append(Operand(mode="absolute", abs_addr=val))
             return mnemonic, size, operands
 
         # Process operands by comma
@@ -363,83 +393,87 @@ class Parser:
             op = self._parse_operand(tok)
             if op:
                 operands.append(op)
-            if tok.maybe('comma') is None:
+            if tok.maybe("comma") is None:
                 break
         return mnemonic, size, operands
 
-    def _parse_operand(self, tok: Tokenizer) -> Optional[Operand]:
+    def _parse_operand(self, tok: Tokenizer) -> Operand | None:
         """Processes one operand (register, #imm, (abs), (Rn), (Rn)+, -(Rn), disp(Rn))."""
         t = tok.peek()
         if t is None:
             return None
 
         # Register
-        if t.kind == 'reg':
+        if t.kind == "reg":
             tok.next()
-            return Operand(mode='reg', reg=t.value)
+            return Operand(mode="reg", reg=t.value)
 
         # Immediate values: #number or #ident
-        if t.kind == 'immediate':
+        if t.kind == "immediate":
             tok.next()
             val = self._parse_expression(tok)
-            return Operand(mode='imm', imm=val)
+            return Operand(mode="imm", imm=val)
 
-        # Absolute address or indirect via register
-        if t.kind == 'lparen':
+            # Absolute address or indirect via register
+        if t.kind == "lparen":
             tok.next()  # skip '('
             next_t = tok.peek()
             # Check if next token is register (for (Rn), (Rn)+)
-            if next_t and next_t.kind == 'reg':
-                reg_tok = tok.next()          # skip register
+            if next_t and next_t.kind == "reg":
+                reg_tok = tok.next()  # skip register
                 after_reg = tok.peek()
-                if after_reg and after_reg.kind == 'rparen' and reg_tok is not None:
+                if after_reg and after_reg.kind == "rparen" and reg_tok is not None:
                     reg = reg_tok.value
-                    tok.next()                # skip ')'
+                    tok.next()  # skip ')'
                     # check '+'
                     plus_tok = tok.peek()
-                    if plus_tok and plus_tok.kind == 'plus':
+                    if plus_tok and plus_tok.kind == "plus":
                         tok.next()
-                        return Operand(mode='postinc', reg=reg)
-                    return Operand(mode='indirect', reg=reg)
-                else:
-                    raise SyntaxError(f"Expected ')' after register in brackets, got {after_reg}")
+                        return Operand(mode="postinc", reg=reg)
+                    return Operand(mode="indirect", reg=reg)
+                raise SyntaxError(f"Expected ')' after register in brackets, got {after_reg}")
             # Otherwise process expression from brackets (absolute address)
-            else:
-                sign = 1
-                peek = tok.peek()
-                if peek and peek.kind == 'minus':
-                    tok.next()
-                    sign = -1
-                val = self._parse_expression(tok) * sign
-                tok.expect('rparen')
-                return Operand(mode='absolute', abs_addr=val)
+            sign = 1
+            peek = tok.peek()
+            if peek and peek.kind == "minus":
+                tok.next()
+                sign = -1
+            abs_val: int | str = self._parse_expression(tok)
+            if sign == -1:
+                if isinstance(abs_val, str):
+                    abs_val = f"-{abs_val}"
+                else:
+                    abs_val = -abs_val
+            tok.expect("rparen")
+            return Operand(mode="absolute", abs_addr=abs_val)
 
         # Shift: disp(Rn)  (i.e., 8(R0) or -4(SP))
-        if t.kind in ('number', 'ident', 'minus'):
+        if t.kind in ("number", "ident", "minus"):
             disp_sign = 1
-            if t.kind == 'minus':
+            if t.kind == "minus":
                 tok.next()
                 disp_sign = -1
                 # after minus there must be a number or an identifier
                 disp_tok = tok.peek()
-                if not disp_tok or disp_tok.kind not in ('number', 'ident'):
+                if not disp_tok or disp_tok.kind not in ("number", "ident"):
                     raise SyntaxError("Expected number or identifier after '-' in displacement")
             else:
                 disp_tok = tok.next()  # already number/identifier
 
             if disp_tok is not None:
                 disp_val = _eval_token_value(disp_tok)
+                disp: int | str
                 if isinstance(disp_val, str) and disp_sign == -1:
                     disp = f"-{disp_val}"
                 elif isinstance(disp_val, int):
                     disp = disp_val * disp_sign
                 else:
                     disp = disp_val  # string without minus
-                tok.expect('lparen')
-                reg_tok = tok.expect('reg')
+                tok.expect("lparen")
+                reg_tok = tok.expect("reg")
                 reg = reg_tok.value
-                tok.expect('rparen')
-                return Operand(mode='displacement', reg=reg, disp=disp)
+                tok.expect("rparen")
+                return Operand(mode="displacement", reg=reg, disp=disp)
 
         return None
 
@@ -449,31 +483,30 @@ class Parser:
             return val
         raise SyntaxError(f"Expected a number, got identifier '{val}'")
 
-    def _parse_expression(self, tok: Tokenizer) -> Union[int, str]:
+    def _parse_expression(self, tok: Tokenizer) -> int | str:
         """Processes simple expression (no brackets).
         All computations are immediate, no labels (labels are processed in the second pass).
         In the first pass, the expression can't contain labels, numbers only.
         """
         t = tok.peek()
-        if t and t.kind in ('number', 'ident'):
+        if t and t.kind in ("number", "ident"):
             tok.next()
             return _eval_token_value(t)
         # If there is unary minus
-        if t and t.kind == 'minus':
+        if t and t.kind == "minus":
             tok.next()
             nt = tok.peek()
-            if nt and nt.kind == 'ident':
+            if nt and nt.kind == "ident":
                 tok.next()
-                return f"-{nt.value}"   # save as string with minus
-            else:
-                val = self._parse_expression(tok)
-                if isinstance(val, int):
-                    return -val
-                # if string is here
-                raise SyntaxError("Cannot negate a label")
+                return f"-{nt.value}"  # save as string with minus
+            val = self._parse_expression(tok)
+            if isinstance(val, int):
+                return -val
+            # if string is here
+            raise SyntaxError("Cannot negate a label")
         raise SyntaxError(f"Expected number in expression, got {t}")
 
-    def _parse_data_operand(self, tok: Tokenizer, item: DataItem):
+    def _parse_data_operand(self, tok: Tokenizer, item: DataItem) -> None:
         """Saves numeric value or label name into the data element."""
         t = tok.peek()
         if t is None:
@@ -482,7 +515,7 @@ class Parser:
         val = self._parse_expression(tok)
         item.values.append(val)
 
-    def _second_pass(self):
+    def _second_pass(self) -> None:
         """Generates binary code for instructions and data, processing labels."""
         # Instructions
         for instr in self.program.code:
@@ -493,27 +526,26 @@ class Parser:
         # Data
         data_words = []
         for item in self.program.data_items:
-            if item.kind == 'db':
+            if item.kind in ["db", "dw"]:
                 for v in item.values:
                     data_words.append(self._resolve_value(v))
-            elif item.kind == 'dw':
-                for v in item.values:
-                    data_words.append(self._resolve_value(v))
-            elif item.kind == 'pstr':
+            elif item.kind == "pstr":
                 s = item.values[0]  # string
+                if not isinstance(s, str):
+                    raise ValueError("Expected string in pstr")
                 data_words.append(len(s))
                 for ch in s:
                     data_words.append(ord(ch))
         self.program.data = data_words
 
-    def _resolve_value(self, val: Union[int | str]) -> int:
+    def _resolve_value(self, val: int | str) -> int:
         """Converts number or label's name into the numeric address."""
         if isinstance(val, int):
             return val
         # if string – label's name (could be with minus)
         negate = False
         name = val
-        if val.startswith('-'):
+        if val.startswith("-"):
             negate = True
             name = val[1:]
         # Search in symbols tables
@@ -525,7 +557,7 @@ class Parser:
             raise ValueError(f"Undefined label: {name}")
         return -addr if negate else addr
 
-    def _resolve_operand(self, op: Operand):
+    def _resolve_operand(self, op: Operand) -> None:
         """Replaces string label names in operand with numbers"""
         if op.imm is not None:
             op.imm = self._resolve_value(op.imm)
@@ -533,4 +565,3 @@ class Parser:
             op.disp = self._resolve_value(op.disp)
         if op.abs_addr is not None:
             op.abs_addr = self._resolve_value(op.abs_addr)
-

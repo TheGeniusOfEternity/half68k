@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
 Half68k Translator
-Usage: translator.py input.asm output.bin
+Usage: translator.py input.s output.bin
 """
 
-import sys
 import struct
+import sys
 from pathlib import Path
 
+from parser import Parser, Program
 from preprocessor import preprocess
-from parser import Parser
 
 
 def format_hex_word(word: int) -> str:
@@ -17,7 +17,7 @@ def format_hex_word(word: int) -> str:
     return f"{word:08X}"
 
 
-def generate_log(program, log_path: Path) -> None:
+def generate_log(program: Program, log_path: Path) -> None:
     """
     Generates text debugging dump.
     Format: <address> - <HEXCODE> - <mnemonic>
@@ -34,11 +34,11 @@ def generate_log(program, log_path: Path) -> None:
             hex_str = format_hex_word(word)
             mnem = instr.mnemonic if i == 0 else ""
             lines.append(f"CODE {addr:08X} - {hex_str} - {mnem}")
-    with open(log_path, "w") as f:
+    with Path.open(log_path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
 
-def write_binary(program, bin_path: Path) -> None:
+def write_binary(program: Program, bin_path: Path) -> None:
     """
     Saves binary fil in format:
     [4 bytes: size of 'data' in words (little-endian)]
@@ -50,7 +50,7 @@ def write_binary(program, bin_path: Path) -> None:
     for instr in program.code:
         code_words.extend(instr.words)
 
-    with open(bin_path, "wb") as f:
+    with Path.open(bin_path, "wb") as f:
         # Header: words of data
         f.write(struct.pack("<I", len(data_words)))
         # Data
@@ -61,8 +61,9 @@ def write_binary(program, bin_path: Path) -> None:
             f.write(struct.pack("<I", word))
 
 
-def main():
-    if len(sys.argv) != 3:
+def main() -> None:
+    args_num = 3
+    if len(sys.argv) != args_num:
         print("Usage: translator.py <input.s> <output.bin>")
         sys.exit(1)
 
@@ -71,7 +72,7 @@ def main():
     log_path = bin_path.with_suffix(".log")
 
     # Read source file
-    with open(asm_path, "r", encoding="utf-8") as f:
+    with Path.open(asm_path, encoding="utf-8") as f:
         raw_lines = f.readlines()
 
     # Preprocessor

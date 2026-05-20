@@ -1,7 +1,7 @@
 import re
-from typing import List, Dict, Tuple
 
-def preprocess(lines: List[str]) -> List[str]:
+
+def preprocess(lines: list[str]) -> list[str]:
     """
     Gets source .asm file as list of lines.
 
@@ -9,9 +9,9 @@ def preprocess(lines: List[str]) -> List[str]:
     and removed directives of conditional compile.
     """
     # State of preprocessor
-    defines: Dict[str, str] = {}                         # %define NAME -> value
-    macros: Dict[str, Tuple[List[str], List[str]]] = {}  # name -> (args, body)
-    output: List[str] = []
+    defines: dict[str, str] = {}  # %define NAME -> value
+    macros: dict[str, tuple[list[str], list[str]]] = {}  # name -> (args, body)
+    output: list[str] = []
 
     # Index of current position in source lines
     i = 0
@@ -22,7 +22,8 @@ def preprocess(lines: List[str]) -> List[str]:
         # --- processing %define ---
         if stripped.startswith("%define"):
             parts = stripped.split(None, 2)  # ['%define', 'NAME', 'value...']
-            if len(parts) >= 3:
+            expected_count = 3
+            if len(parts) >= expected_count:
                 name = parts[1]
                 value = parts[2]
                 # remove comments after value, if exists
@@ -35,7 +36,7 @@ def preprocess(lines: List[str]) -> List[str]:
         # --- Capture multiline macro %macro ... %endmacro ---
         if stripped.startswith("%macro"):
             # format: %macro name arg1,arg2,...
-            header = stripped[len("%macro"):].strip()
+            header = stripped[len("%macro") :].strip()
             # split macros name from args
             if " " in header:
                 macro_name, args_str = header.split(None, 1)
@@ -62,16 +63,16 @@ def preprocess(lines: List[str]) -> List[str]:
         if stripped.startswith("%ifdef") or stripped.startswith("%ifndef"):
             # select, what condition and name
             if stripped.startswith("%ifdef"):
-                name = stripped[len("%ifdef"):].strip()
+                name = stripped[len("%ifdef") :].strip()
                 condition = name in defines
             else:
-                name = stripped[len("%ifndef"):].strip()
+                name = stripped[len("%ifndef") :].strip()
                 condition = name not in defines
 
             # search for matching %else and %endif with nested condition
             depth = 1
-            block_lines_if = []
-            block_lines_else = []
+            block_lines_if: list[str] = []
+            block_lines_else: list[str] = []
             current_block = block_lines_if
             i += 1
             else_found = False
@@ -109,7 +110,7 @@ def preprocess(lines: List[str]) -> List[str]:
             if first_token in macros:
                 macro_name = first_token
                 args_def, body = macros[macro_name]
-                call_args_str = stripped[len(macro_name):].strip()
+                call_args_str = stripped[len(macro_name) :].strip()
                 call_args = [a.strip() for a in call_args_str.split(",") if a.strip()] if call_args_str else []
                 for body_line in body:
                     new_line = body_line
@@ -117,9 +118,9 @@ def preprocess(lines: List[str]) -> List[str]:
                         if j < len(call_args):
                             # Замена только целых слов (границы \b)
                             new_line = re.sub(
-                                r'\b' + re.escape(arg_name) + r'\b',
+                                r"\b" + re.escape(arg_name) + r"\b",
                                 call_args[j],
-                                new_line
+                                new_line,
                             )
                     output.append(new_line)
                 i += 1
