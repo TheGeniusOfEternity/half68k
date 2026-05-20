@@ -14,7 +14,7 @@ TOKEN_RE = re.compile(r'''
     |(?P<size>\.[bl])                            # size .b or .l
     |(?P<comma>,)                                   # comma
     |(?P<directive>db|dw|pstr|\.org|\.data|\.code)  # directives
-    |(?P<number>\d+|0x[0-9a-fA-F]+|0b[01]+)         # numbers
+    |(?P<number>0x[0-9a-fA-F]+|0b[01]+|\d+)         # numbers
     |(?P<reg>R[0-6]|SP)                             # registers
     |(?P<immediate>\#)                              # immediate operand symbol
     |(?P<lparen>\()                                 # opening bracket
@@ -250,9 +250,9 @@ class Parser:
 
     def _first_pass(self):
         current_section = None  # 'data' or 'code'
-        addr = 0                # current address in section
+        addrs = {'data': 0, 'code': 0}  # independent address counters
 
-        for idx, line in enumerate(self.lines):
+        for line in self.lines:
             stripped = line.strip()
             if not stripped or stripped.startswith(';'):
                 continue
@@ -266,27 +266,30 @@ class Parser:
             if t.kind == 'label':
                 label_name = t.value[:-1]  # remove ':'
                 tok.next()
-                if current_section == 'data':
-                    self.program.data_symbols[label_name] = addr
-                elif current_section == 'code':
-                    self.program.symbols[label_name] = addr
-                else:
+                if current_section is None:
                     raise SyntaxError(f"Label without section: {label_name}")
-                # After label there might be instruction/directive on the same line
+                if current_section == 'data':
+                    self.program.data_symbols[label_name] = addrs['data']
+                elif current_section == 'code':
+                    self.program.symbols[label_name] = addrs['code']
                 t = tok.peek()
                 if t is None:
                     continue
 
             # Check if directive
             if t.kind == 'directive' and t.value in ('.data', '.code'):
-                current_section = t.value[1:]  # 'data' or 'code'
+                current_section = t.value[1:]
+                # don't reset counter on second entry, switch only
                 tok.next()
                 continue
 
             # .org
             if t.kind == 'directive' and t.value == '.org':
                 tok.next()
-                addr = self._parse_expression_int(tok)
+                new_addr = self._parse_expression_int(tok)
+                if current_section is None:
+                    raise SyntaxError(".org without section")
+                addrs[current_section] = new_addr
                 continue
 
             # In data section: directives db, dw, pstr
@@ -294,25 +297,25 @@ class Parser:
                 if t.kind == 'directive':
                     directive = t.value
                     tok.next()
-                    item = DataItem(directive, addr)
+                    item = DataItem(directive, addrs['data'])
                     if directive == 'db':
                         while tok.peek() is not None:
                             # Parse expression without computation, if label — save token as string
                             self._parse_data_operand(tok, item)
-                            addr += 1
+                            addrs['data'] += 1
                             if tok.maybe('comma') is None:
                                 break
                     elif directive == 'dw':
                         while tok.peek() is not None:
                             self._parse_data_operand(tok, item)
-                            addr += 1
+                            addrs['data'] += 1
                             if tok.maybe('comma') is None:
                                 break
                     elif directive == 'pstr':
                         str_tok = tok.expect('string')
                         s = str_tok.value[1:-1]
                         item.values.append(s)
-                        addr += 1 + len(s)
+                        addrs['data'] += 1 + len(s)
                     else:
                         raise SyntaxError(f"Unknown data directive: {directive}")
                     self.program.data_items.append(item)
@@ -323,17 +326,16 @@ class Parser:
                 # Define size of the instruction (based on operand modes)
                 mnemonic, size, operands = self._parse_instruction(tok)
                 instr_size = _calc_instr_size(mnemonic, operands)
-                # Write information for second pass
-                self.program.code.append(Instruction(mnemonic, size, operands, addr))
-                addr += instr_size
+                self.program.code.append(Instruction(mnemonic, size, operands, addrs['code']))
+                addrs['code'] += instr_size
                 continue
 
             # If token was not matched
             raise SyntaxError(f"Unexpected token: {t}")
 
         # Remember max addresses
-        if current_section == 'code':
-            self.program.code_addr = addr  # end address (next free)
+        self.program.data_addr = addrs['data']
+        self.program.code_addr = addrs['code']
 
     def _parse_instruction(self, tok: Tokenizer) -> Tuple[str, str, List[Operand]]:
         """Process mnemonics, size and operands."""
