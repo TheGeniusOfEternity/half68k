@@ -441,6 +441,20 @@ class Parser:
             tok.expect("rparen")
             return Operand(mode="absolute", abs_addr=abs_val)
 
+        # Predecrement
+        if t.kind == "minus":
+            saved_pos = tok.pos
+            tok.next()  # consume '-'
+            next_t = tok.peek()
+            if next_t and next_t.kind == "lparen":
+                tok.next()  # consume '('
+                reg_tok = tok.expect("reg")
+                reg = reg_tok.value
+                tok.expect("rparen")
+                return Operand(mode="predec", reg=reg)
+            # not a predecrement, rewind to let displacement/expression handle it
+            tok.pos = saved_pos
+
         # Shift: disp(Rn)  (i.e., 8(R0) or -4(SP))
         if t.kind in ("number", "ident", "minus"):
             disp_sign = 1
