@@ -252,7 +252,6 @@ class Parser:
         current_section = None  # 'data' or 'code'
         addr = 0                # current address in section
 
-        print("DEBUG: Starting first pass")
         for idx, line in enumerate(self.lines):
             stripped = line.strip()
             if not stripped or stripped.startswith(';'):
@@ -351,6 +350,12 @@ class Parser:
                 raise SyntaxError(f"Size suffix required for {mnemonic}")
 
         operands = []
+        # For transition instructions (jmp, jsr, branches) operand is expression (absolute address)
+        if mnemonic in ('jmp', 'jsr') or mnemonic.startswith('b'):
+            val = self._parse_expression(tok)
+            operands.append(Operand(mode='absolute', abs_addr=val))
+            return mnemonic, size, operands
+
         # Process operands by comma
         while True:
             op = self._parse_operand(tok)
