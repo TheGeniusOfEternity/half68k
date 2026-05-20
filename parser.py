@@ -143,14 +143,8 @@ def _calc_instr_size(mnemonic: str, operands: list[Operand]) -> int:
     words = 1
     # Extensions for operands
     for op in operands:
-        if op.mode == "imm":
-            words += 1  # 32-bit value
-        elif op.mode == "displacement":
-            words += 1  # 16-bit shift (in separate word)
-        elif op.mode == "absolute":
-            words += 1  # 32-bit address
-        # postinc, predec, reg, indirect — without extensions
-    # For transitions (jmp, jsr, bc*) there is always 32-bit address
+        if op.mode in ("imm", "displacement", "absolute", "postinc", "predec"):
+            words += 1
     if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
         words += 1  # absolute address
     return words
@@ -298,7 +292,7 @@ class Parser:
                 tok.next()
                 if current_section is None:
                     raise SyntaxError(f"Label without section: {label_name}")
-                if current_section == "data":
+                if current_section == "data":  # type: ignore[unreachable]
                     self.program.data_symbols[label_name] = addrs["data"]
                 elif current_section == "code":
                     self.program.symbols[label_name] = addrs["code"]
