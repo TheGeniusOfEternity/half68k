@@ -38,6 +38,13 @@ OPCODES = {
     "bge": 0b100000,
 }
 
+# Instructions without size required
+NO_SIZE_MNEMONICS = {
+    'jmp', 'jsr', 'rts', 'die',
+    'bcc', 'bcs', 'beq', 'bne', 'bmi', 'bpl',
+    'bvs', 'bvc', 'blt', 'ble', 'bgt', 'bge'
+}
+
 # Register code (3 bits)
 REGISTERS = {
     "R0": 0, "R1": 1, "R2": 2, "R3": 3,

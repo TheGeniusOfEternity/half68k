@@ -4,14 +4,14 @@ from isa import (
     encode_opcode, encode_size, encode_reg,
     build_opcode_word,
     MODE_IMMEDIATE, MODE_REGISTER_DIRECT, MODE_REGISTER_INDIRECT, MODE_SPECIAL,
-    SPECIAL_POSTINC, SPECIAL_PREDEC, SPECIAL_DISPLACEMENT, SPECIAL_ABSOLUTE
+    SPECIAL_POSTINC, SPECIAL_PREDEC, SPECIAL_DISPLACEMENT, SPECIAL_ABSOLUTE, NO_SIZE_MNEMONICS
 )
 
 # Regular expression for string tokenization
 TOKEN_RE = re.compile(r'''
     (?P<label>^[A-Za-z_]\w*:)                       # label
     |(?P<mnemonic>mv|add|sub|cmp|mul|div|and|or|xor|clr|neg|not|asl|asr|lsl|lsr|jmp|jsr|rts|die|bcc|bcs|beq|bne|bmi|bpl|bvs|bvc|blt|ble|bgt|bge)(?=\s|$|\.)  # мнемоника
-    |(?P<size>\.\w+)                                # size .b or .l
+    |(?P<size>\.[bl])                            # size .b or .l
     |(?P<comma>,)                                   # comma
     |(?P<directive>db|dw|pstr|\.org|\.data|\.code)  # directives
     |(?P<number>\d+|0x[0-9a-fA-F]+|0b[01]+)         # numbers
@@ -249,10 +249,11 @@ class Parser:
         return self.program
 
     def _first_pass(self):
-        current_section = None  # 'data' или 'code'
+        current_section = None  # 'data' or 'code'
         addr = 0                # current address in section
 
-        for line in self.lines:
+        print("DEBUG: Starting first pass")
+        for idx, line in enumerate(self.lines):
             stripped = line.strip()
             if not stripped or stripped.startswith(';'):
                 continue
@@ -340,12 +341,14 @@ class Parser:
         mnemonic_tok = tok.expect('mnemonic')
         mnemonic = mnemonic_tok.value
 
-        # Check size (.b or .l)
-        size_tok = tok.maybe('size')
-        if size_tok:
-            size = size_tok.value[1:]  # убираем точку
+        if mnemonic in NO_SIZE_MNEMONICS:
+            size = 'l'  # mock size, will be ignored
         else:
-            raise SyntaxError(f"Size suffix required for {mnemonic}")
+            size_tok = tok.maybe('size')
+            if size_tok:
+                size = size_tok.value[1:]  # remove dot
+            else:
+                raise SyntaxError(f"Size suffix required for {mnemonic}")
 
         operands = []
         # Process operands by comma
