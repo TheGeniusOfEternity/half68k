@@ -178,12 +178,6 @@ def _operand_to_field(op: Operand, words_ext: List[int]) -> int:
         raise ValueError(f"Unknown operand mode: {op.mode}")
     return field
 
-
-def _resolve_value(val: int, symbol_table: Dict[str, int]) -> int:
-    # TODO: resolve value in second pass
-    return val
-
-
 def _generate_instruction_words(instr: Instruction) -> List[int]:
     """Returns list of 32-bit words for instruction."""
     words = []
@@ -479,14 +473,54 @@ class Parser:
         item.values.append(val)
 
     def _second_pass(self):
-        """Generates binary for all instructions using symbols."""
-        # Clear words of instructions
+        """Generates binary code for instructions and data, processing labels."""
+        # Instructions
         for instr in self.program.code:
+            for op in instr.operands:
+                self._resolve_operand(op)
             instr.words = _generate_instruction_words(instr)
-        # Generate words for data
+
+        # Data
         data_words = []
-        for line in self.lines:
-            # TODO: processing
-            pass
+        for item in self.program.data_items:
+            if item.kind == 'db':
+                for v in item.values:
+                    data_words.append(self._resolve_value(v))
+            elif item.kind == 'dw':
+                for v in item.values:
+                    data_words.append(self._resolve_value(v))
+            elif item.kind == 'pstr':
+                s = item.values[0]  # string
+                data_words.append(len(s))
+                for ch in s:
+                    data_words.append(ord(ch))
         self.program.data = data_words
+
+    def _resolve_value(self, val: Union[int | str]) -> int:
+        """Converts number or label's name into numeric address."""
+        if isinstance(val, int):
+            return val
+        # if string – label's name (could be with minus)
+        negate = False
+        name = val
+        if val.startswith('-'):
+            negate = True
+            name = val[1:]
+        # Search in symbols tables
+        if name in self.program.symbols:
+            addr = self.program.symbols[name]
+        elif name in self.program.data_symbols:
+            addr = self.program.data_symbols[name]
+        else:
+            raise ValueError(f"Undefined label: {name}")
+        return -addr if negate else addr
+
+    def _resolve_operand(self, op: Operand):
+        """Replaces string label names in operand with numbers"""
+        if op.imm is not None:
+            op.imm = self._resolve_value(op.imm)
+        if op.disp is not None:
+            op.disp = self._resolve_value(op.disp)
+        if op.abs_addr is not None:
+            op.abs_addr = self._resolve_value(op.abs_addr)
 
