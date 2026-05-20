@@ -83,7 +83,7 @@ class Operand:
         self.abs_addr = abs_addr  # absolute address
 
 class Instruction:
-    """Describes single machine instruction."""
+    """Describes a single machine instruction."""
     def __init__(self, mnemonic: str, size: str, operands: List[Operand], addr: int):
         self.mnemonic = mnemonic
         self.size = size
@@ -92,7 +92,7 @@ class Instruction:
         self.words: List[int] = []  # binary code (list of 32-bit words)
 
 class DataItem:
-    """Saves information about element of data section for second pass."""
+    """Saves information about the element of the data section for the second pass."""
     def __init__(self, kind: str, addr: int):
         self.kind = kind          # 'db', 'dw' или 'pstr'
         self.addr = addr          # address of this element's start
@@ -100,7 +100,7 @@ class DataItem:
         # for pstr: list from one element - line
 
 class Program:
-    """Parse result: list of instructions/data and labels table."""
+    """Parse result: list of instructions/data and table of labels."""
     def __init__(self):
         self.code: List[Instruction] = []       # instructions (.code section)
         self.data: List[int] = []               # flat data words list
@@ -179,9 +179,9 @@ def _operand_to_field(op: Operand, words_ext: List[int]) -> int:
     return field
 
 def _generate_instruction_words(instr: Instruction) -> List[int]:
-    """Returns list of 32-bit words for instruction."""
+    """Returns the list of 32-bit words for instruction."""
     words = []
-    # Define operands mode and collect fields src/dst
+    # Define operand mode and collect fields src/dst
     # For instructions with one operand (clr, neg, not) second operand is the same
     # For transitions operands are non-standard.
 
@@ -231,7 +231,7 @@ def _generate_instruction_words(instr: Instruction) -> List[int]:
 
     extra = 0  # for shifts
     word = build_opcode_word(mnemonic, size, src_mode, dst_mode, extra)
-    # Insert opcode into start of the words list (_operand_to_field added extension to the end)
+    # Insert opcode into start of the list of words (_operand_to_field added extension to the end)
     words.insert(0, word)
     return words
 
@@ -338,12 +338,12 @@ class Parser:
         self.program.code_addr = addrs['code']
 
     def _parse_instruction(self, tok: Tokenizer) -> Tuple[str, str, List[Operand]]:
-        """Process mnemonics, size and operands."""
+        """Process mnemonics, size, operands."""
         mnemonic_tok = tok.expect('mnemonic')
         mnemonic = mnemonic_tok.value
 
         if mnemonic in NO_SIZE_MNEMONICS:
-            size = 'l'  # mock size, will be ignored
+            size = 'l'  # mock size will be ignored
         else:
             size_tok = tok.maybe('size')
             if size_tok:
@@ -450,9 +450,9 @@ class Parser:
         raise SyntaxError(f"Expected a number, got identifier '{val}'")
 
     def _parse_expression(self, tok: Tokenizer) -> Union[int, str]:
-        """Processes simple expression: term + term - term ... (no brackets).
-        All computations immediate, no labels (label are processed in second pass).
-        In first pass expression can't contain labels, numbers only.
+        """Processes simple expression (no brackets).
+        All computations are immediate, no labels (labels are processed in the second pass).
+        In the first pass, the expression can't contain labels, numbers only.
         """
         t = tok.peek()
         if t and t.kind in ('number', 'ident'):
@@ -469,12 +469,12 @@ class Parser:
                 val = self._parse_expression(tok)
                 if isinstance(val, int):
                     return -val
-                # if string here
+                # if string is here
                 raise SyntaxError("Cannot negate a label")
         raise SyntaxError(f"Expected number in expression, got {t}")
 
     def _parse_data_operand(self, tok: Tokenizer, item: DataItem):
-        """Saves numeric value or label name into data element."""
+        """Saves numeric value or label name into the data element."""
         t = tok.peek()
         if t is None:
             raise SyntaxError("Expected data operand")
@@ -507,7 +507,7 @@ class Parser:
         self.program.data = data_words
 
     def _resolve_value(self, val: Union[int | str]) -> int:
-        """Converts number or label's name into numeric address."""
+        """Converts number or label's name into the numeric address."""
         if isinstance(val, int):
             return val
         # if string – label's name (could be with minus)

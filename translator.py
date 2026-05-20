@@ -51,7 +51,7 @@ def write_binary(program, bin_path: Path) -> None:
         code_words.extend(instr.words)
 
     with open(bin_path, "wb") as f:
-        # Header: amount of data words
+        # Header: words of data
         f.write(struct.pack("<I", len(data_words)))
         # Data
         for word in data_words:

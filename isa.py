@@ -2,7 +2,7 @@
 SIZE_L = 0  # .l — 32 bit
 SIZE_B = 1  # .b — 8 bit
 
-# Instructions codes (6 bit, elder opcode fields)
+# Instruction codes (6 bit, elder opcode fields)
 OPCODES = {
     "mv":  0b000001,
     "add": 0b000010,
