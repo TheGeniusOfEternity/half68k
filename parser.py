@@ -139,14 +139,14 @@ class Program:
 
 def _calc_instr_size(mnemonic: str, operands: list[Operand]) -> int:
     """Computes length of instruction in words."""
-    # Basic opcode word
+    # Control-flow instructions encode as two words: opcode + absolute address
+    if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
+        return 2
+    # For other instructions
     words = 1
-    # Extensions for operands
     for op in operands:
         if op.mode in ("imm", "displacement", "absolute", "postinc", "predec"):
             words += 1
-    if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
-        words += 1  # absolute address
     return words
 
 
