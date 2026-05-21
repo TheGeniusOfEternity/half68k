@@ -96,7 +96,7 @@
 - Препроцессор
   - %define NAME value – текстовая подстановка.
   - %macro NAME args... … %endmacro – многострочные макросы.
-  - %ifdef NAME / %ifndef NAME … %else … %endif – условная компиляция.
+  - %ifdef NAME / %ifndef NAME … %else … %endif – условная компиляция (без вложенности)
 
 
 ## Организация памяти
