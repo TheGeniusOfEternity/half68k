@@ -311,7 +311,7 @@ class Parser:
             if t.kind == "directive" and t.value == ".org":
                 tok.next()
                 new_addr = self._parse_expression_int(tok)
-                if current_section is None:
+                if not current_section:
                     raise SyntaxError(".org without section")
                 addrs[current_section] = new_addr
                 continue
