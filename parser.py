@@ -273,7 +273,7 @@ class Parser:
         return self.program
 
     def _first_pass(self) -> None:
-        current_section = None  # 'data' or 'code'
+        current_section = ""  # 'data' or 'code'
         addrs = {"data": 0, "code": 0}  # independent address counters
 
         for line in self.lines:
@@ -290,12 +290,12 @@ class Parser:
             if t.kind == "label":
                 label_name = t.value[:-1]  # remove ':'
                 tok.next()
-                if current_section is None:
-                    raise SyntaxError(f"Label without section: {label_name}")
-                if current_section == "data":  # type: ignore[unreachable]
+                if current_section == "data":
                     self.program.data_symbols[label_name] = addrs["data"]
                 elif current_section == "code":
                     self.program.symbols[label_name] = addrs["code"]
+                else:
+                    raise SyntaxError(f"Label without section: {label_name}")
                 t = tok.peek()
                 if t is None:
                     continue
