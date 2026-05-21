@@ -14,7 +14,7 @@ from preprocessor import preprocess
 
 def format_hex_word(word: int) -> str:
     """Formats 32-bit word as 8-symbol HEX-string."""
-    return f"{word:08X}"
+    return f"{word & 0xFFFFFFFF:08X}"
 
 
 def generate_log(program: Program, log_path: Path) -> None:
@@ -55,10 +55,9 @@ def write_binary(program: Program, bin_path: Path) -> None:
         f.write(struct.pack("<I", len(data_words)))
         # Data
         for word in data_words:
-            f.write(struct.pack("<I", word))
-        # Code
+            f.write(struct.pack("<I", word & 0xFFFFFFFF))
         for word in code_words:
-            f.write(struct.pack("<I", word))
+            f.write(struct.pack("<I", word & 0xFFFFFFFF))
 
 
 def main() -> None:
