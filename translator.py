@@ -50,7 +50,7 @@ def generate_log(program: Program, log_path: Path) -> None:
 
 def write_binary(program: Program, bin_path: Path) -> None:
     """
-    Saves binary fil in format:
+    Saves binary file in format:
     [4 bytes: size of 'data' in words (little-endian)]
     [data: words of data]
     [code: words of instructions]
