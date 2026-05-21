@@ -408,7 +408,7 @@ class Parser:
             val = self._parse_expression(tok)
             return Operand(mode="imm", imm=val)
 
-            # Absolute address or indirect via register
+        # Absolute address or indirect via register
         if t.kind == "lparen":
             tok.next()  # skip '('
             next_t = tok.peek()
