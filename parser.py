@@ -245,13 +245,14 @@ def _generate_instruction_words(instr: Instruction) -> list[int]:
     # Define src and dst modes
     src_mode = 0
     dst_mode = 0
-    if len(ops) >= 1:
-        src_mode = _operand_to_field(ops[0], words)
-    if len(ops) >= 2:
-        dst_mode = _operand_to_field(ops[1], words)
-    elif len(ops) == 1:
-        # For instructions with one operand (clr, neg, not) second operand is ignored
-        dst_mode = 0
+    # For instructions with one operand (clr, neg, not) second operand is ignored
+    if len(ops) == 1:
+        dst_mode = _operand_to_field(ops[0], words)
+    else:
+        if len(ops) >= 1:
+            src_mode = _operand_to_field(ops[0], words)
+        if len(ops) >= 2:
+            dst_mode = _operand_to_field(ops[1], words)
 
     extra = 0  # for shifts
     word = build_opcode_word(mnemonic, size, src_mode, dst_mode, extra)
