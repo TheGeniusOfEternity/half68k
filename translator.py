@@ -23,17 +23,27 @@ def generate_log(program: Program, log_path: Path) -> None:
     Format: <address> - <HEXCODE> - <mnemonic>
     """
     lines = []
-    # Data section (DATA)
-    for offset, word in enumerate(program.data):
-        hex_str = format_hex_word(word)
-        lines.append(f"DATA {offset:08X} - {hex_str}")
-    # Code section (CODE)
+    # Data: use data_items for correct addresses
+    data_offset = 0
+    for item in program.data_items:
+        addr = item.addr
+        if item.kind in ("db", "dw"):
+            n = len(item.values)
+            for i in range(n):
+                word = program.data[data_offset + i]
+                lines.append(f"DATA {addr + i:08X} - {format_hex_word(word)}")
+            data_offset += n
+        elif item.kind == "pstr":
+            s = str(item.values[0])  # string
+            n = 1 + len(s)
+            for i in range(n):
+                word = program.data[data_offset + i]
+                lines.append(f"DATA {addr + i:08X} - {format_hex_word(word)}")
+            data_offset += n
+    # Code
     for instr in program.code:
         for i, word in enumerate(instr.words):
-            addr = instr.addr + i
-            hex_str = format_hex_word(word)
-            mnem = instr.mnemonic if i == 0 else ""
-            lines.append(f"CODE {addr:08X} - {hex_str} - {mnem}")
+            lines.append(f"CODE {instr.addr + i:08X} - {format_hex_word(word)} - {instr.mnemonic if i == 0 else ''}")
     with Path.open(log_path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
