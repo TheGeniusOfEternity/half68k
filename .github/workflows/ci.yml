@@ -34,8 +34,7 @@ jobs:
           for s_file in tests/**/*.s; do
             echo "Compiling $s_file"
             python translator.py "$s_file" "${s_file%.s}.bin"
-            # compare .log with с true golden.log
-            if [ -f "${s_file%.s}.golden.log" ]; then
-              diff "${s_file%.s}.log" "${s_file%.s}.golden.log" || exit 1
+            if [ -f "$(dirname "$s_file")/golden.log" ]; then
+               diff "${s_file%.s}.log" "$(dirname "$s_file")/golden.log" || exit 1
             fi
           done
