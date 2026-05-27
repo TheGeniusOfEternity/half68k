@@ -55,7 +55,7 @@ name_print_loop:
 name_print_done:
     ; Выводим "!"
     mv.l    #end_greet, R0    ; set end_greet pointer to R0
-    jsr     print_string      ; goto proceure print_string
+    jsr     print_string      ; goto procedure print_string
 
     die                       ; stops program
 
@@ -67,8 +67,8 @@ print_string:
 print_loop:
     cmp.b   #0, R2            ; compare counter with 0
     beq     print_done        ; if true then goto print_done
-    mv.b    (R0)+, R0         ; symbol
-    mv.b    R0, (OUT_PORT)    ; print current symbol to the output
+    mv.b    (R0)+, R1         ; symbol
+    mv.b    R1, (OUT_PORT)    ; print current symbol to the output
     sub.b   #1, R2            ; decrement counter
     jmp     print_loop        ; goto print_loop
 
