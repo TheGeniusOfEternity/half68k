@@ -178,11 +178,11 @@ def _operand_to_field(op: Operand, words_ext: list[int]) -> int:
         field = MODE_SPECIAL | SPECIAL_POSTINC
         # Store register number in extended word
         # Scheme: bits [19:16] for register number, [15:0] — shift
-        ext_word = (encode_reg(op.reg) << 16) & 0xF0000
+        ext_word = (encode_reg(op.reg) << 16) & 0x70000
         words_ext.append(ext_word)
     elif op.mode == "predec" and op.reg is not None:
         field = MODE_SPECIAL | SPECIAL_PREDEC
-        ext_word = (encode_reg(op.reg) << 16) & 0xF0000
+        ext_word = (encode_reg(op.reg) << 16) & 0x70000
         words_ext.append(ext_word)
     elif op.mode == "displacement" and op.disp is not None and op.reg is not None:
         field = MODE_SPECIAL | SPECIAL_DISPLACEMENT
