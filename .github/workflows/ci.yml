@@ -26,8 +26,7 @@ jobs:
 
       - name: Run Translator Golden Tests
         run: |
-          mkdir -p tests/hello tests/cat tests/hello_user_name tests/sort tests/prob1 tests/double_precision tests/features
-          for s_file in tests/**/*.s; do
+          find tests -name '*.s' | while IFS= read -r s_file; do
             echo "Compiling $s_file"
             python translator.py "$s_file" "${s_file%.s}.bin"
             if [ -f "$(dirname "$s_file")/golden.log" ]; then
