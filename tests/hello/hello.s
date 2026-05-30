@@ -9,7 +9,7 @@ msg:    pstr "Hello, World!"
 .org 0x1000
 start:
     mv.l    #msg, R0         ; R0 = string address
-    mv.b    (R0)+, R1        ; R1 = length, R0 указывает на первый символ
+    mv.b    (R0)+, R1        ; R1 = length, R0 points to the first symbol
     mv.l    R1, R2           ; set R2 as amount of remaining symbols
 loop:
     cmp.b   #0, R2           ; compare R2 with 0
