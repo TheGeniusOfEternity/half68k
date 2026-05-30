@@ -108,6 +108,8 @@ def preprocess(lines: list[str]) -> list[str]:
                 new_line = body_line
                 for k, arg_name in enumerate(args_def):
                     new_line = re.sub(r"\b" + re.escape(arg_name) + r"\b", call_args[k], new_line)
+                for name, value in defines.items():
+                    new_line = re.sub(r"\b" + re.escape(name) + r"\b", value, new_line)
                 output.append(new_line)
             i += 1
             continue
