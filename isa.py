@@ -38,7 +38,7 @@ OPCODES = {
     "bge": 0b100000,
 }
 
-# Instructions without size required
+# Instructions without size suffix required
 NO_SIZE_MNEMONICS = {
     "jmp",
     "jsr",
@@ -57,6 +57,9 @@ NO_SIZE_MNEMONICS = {
     "bgt",
     "bge",
 }
+
+# Instructions encoded as opcode + absolute address (2 words)
+BRANCH_MNEMONICS = {"jmp", "jsr", "bcc", "bcs", "beq", "bne", "bmi", "bpl", "bvs", "bvc", "blt", "ble", "bgt", "bge"}
 
 # Register code (3 bits)
 REGISTERS = {

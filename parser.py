@@ -1,6 +1,7 @@
 import re
 
 from isa import (
+    BRANCH_MNEMONICS,
     MODE_IMMEDIATE,
     MODE_REGISTER_DIRECT,
     MODE_REGISTER_INDIRECT,
@@ -140,7 +141,7 @@ class Program:
 def _calc_instr_size(mnemonic: str, operands: list[Operand]) -> int:
     """Computes length of instruction in words."""
     # Control-flow instructions encode as two words: opcode + absolute address
-    if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
+    if mnemonic in BRANCH_MNEMONICS:
         return 2
     # For other instructions
     words = 1
@@ -210,7 +211,7 @@ def _generate_instruction_words(instr: Instruction) -> list[int]:
     ops = instr.operands
 
     # If instruction is flow controlling (jmp, jsr, bcc, ...) then format is different: opcode + 32-bit address
-    if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
+    if mnemonic in BRANCH_MNEMONICS:
         opcode = encode_opcode(mnemonic)
         sz = encode_size(size)  # размер не важен для переходов, но поле оставим
         # Fields src/dst are not used, reset
@@ -378,7 +379,7 @@ class Parser:
 
         operands = []
         # For transition instructions (jmp, jsr, branches) operand is expression (absolute address)
-        if mnemonic in ("jmp", "jsr") or mnemonic.startswith("b"):
+        if mnemonic in BRANCH_MNEMONICS:
             val = self._parse_expression(tok)
             operands.append(Operand(mode="absolute", abs_addr=val))
             return mnemonic, size, operands
