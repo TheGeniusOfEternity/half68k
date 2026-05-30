@@ -99,7 +99,7 @@ def preprocess(lines: list[str]) -> list[str]:
             expected = len(args_def)
             actual = len(call_args)
             if expected != actual:
-                raise ValueError(f"Macro '{macro_name}' expects {expected} argument(s), " f"but {actual} were given.")
+                raise ValueError(f"Macro '{macro_name}' expects {expected} argument(s), but {actual} were given.")
 
             for body_line in body:
                 new_line = body_line
