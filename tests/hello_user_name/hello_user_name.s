@@ -40,7 +40,7 @@ read_done:
     mv.l    #greeting, R0     ; set greeting pointer to R0
     jsr     print_string      ; goto procedure print_string
 
-    ; Pring name_buf (R2 symbols)
+    ; Print name_buf (R2 symbols)
     mv.l    #name_buf, R1     ; buffer pointer
     mv.l    R2, R3            ; counter
 
@@ -53,7 +53,7 @@ name_print_loop:
     jmp     name_print_loop   ; goto name_print_loop
 
 name_print_done:
-    ; Выводим "!"
+    ; Print "!"
     mv.l    #end_greet, R0    ; set end_greet pointer to R0
     jsr     print_string      ; goto procedure print_string
 
