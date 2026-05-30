@@ -10,7 +10,9 @@ def preprocess(lines: list[str]) -> list[str]:
     skip_depth = 0  # depth of inactive conditional blocks
     while i < len(lines):
         line = lines[i]
-        stripped = line.strip()
+
+        # Remove comment for correct directive analysis
+        stripped = line.strip().split(";", 1)[0].strip()
 
         # --- Conditional compile ---
         if stripped.startswith("%ifdef") or stripped.startswith("%ifndef"):
@@ -54,8 +56,6 @@ def preprocess(lines: list[str]) -> list[str]:
             if len(parts) >= 3:
                 name = parts[1]
                 value = parts[2]
-                if ";" in value:
-                    value = value.split(";", 1)[0].strip()
                 defines[name] = value
             i += 1
             continue
@@ -73,7 +73,7 @@ def preprocess(lines: list[str]) -> list[str]:
             body_lines = []
             i += 1
             while i < len(lines):
-                if lines[i].strip() == "%endmacro":
+                if lines[i].strip().split(";", 1)[0].strip() == "%endmacro":
                     i += 1
                     break
                 body_lines.append(lines[i])
