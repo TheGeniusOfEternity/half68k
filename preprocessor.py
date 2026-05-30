@@ -73,9 +73,12 @@ def preprocess(lines: list[str]) -> list[str]:
             body_lines = []
             i += 1
             while i < len(lines):
-                if lines[i].strip().split(";", 1)[0].strip() == "%endmacro":
+                stripped_line = lines[i].strip().split(";", 1)[0].strip()
+                if stripped_line == "%endmacro":
                     i += 1
                     break
+                if stripped_line.startswith("%macro"):
+                    raise ValueError("Nested macros are not supported")
                 body_lines.append(lines[i])
                 i += 1
             macros[macro_name] = (args, body_lines)
