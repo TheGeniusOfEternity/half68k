@@ -56,8 +56,8 @@ class Token:
 class Tokenizer:
     """Splits string into tokens via regular expression."""
 
-    def __init__(self, line: str):
-        self.tokens = []
+    def __init__(self, line: str) -> None:
+        self.tokens: list[Token] = []
         for m in TOKEN_RE.finditer(line):
             kind = m.lastgroup
             value = m.group()
