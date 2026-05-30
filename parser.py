@@ -12,9 +12,7 @@ from isa import (
     SPECIAL_POSTINC,
     SPECIAL_PREDEC,
     build_opcode_word,
-    encode_opcode,
     encode_reg,
-    encode_size,
 )
 
 # Regular expression for string tokenization
@@ -212,13 +210,8 @@ def _generate_instruction_words(instr: Instruction) -> list[int]:
 
     # If instruction is flow controlling (jmp, jsr, bcc, ...) then format is different: opcode + 32-bit address
     if mnemonic in BRANCH_MNEMONICS:
-        opcode = encode_opcode(mnemonic)
-        sz = encode_size(size)  # размер не важен для переходов, но поле оставим
-        # Fields src/dst are not used, reset
-        word = (opcode << 26) | (sz << 25)
+        word = build_opcode_word(mnemonic, size, 0, 0, 0)
         words.append(word)
-        # Add transition address (пока не знаем, в первом проходе у нас операнд absolute)
-        # Search operand with absolute address
         addr = 0
         for op in ops:
             if op.mode == "absolute":
@@ -226,19 +219,12 @@ def _generate_instruction_words(instr: Instruction) -> list[int]:
                     addr = op.abs_addr
                 else:
                     raise ValueError("Unresolved label in branch target")
-            elif op.mode == "imm":
-                if isinstance(op.imm, int):
-                    addr = op.imm
-                else:
-                    raise ValueError("Unresolved label in branch target")
         words.append(addr)
         return words
 
     # Instructions without operands (rts, die)
     if mnemonic in ("rts", "die"):
-        opcode = encode_opcode(mnemonic)
-        sz = encode_size(size)
-        word = (opcode << 26) | (sz << 25)
+        word = build_opcode_word(mnemonic, size, 0, 0, 0)
         words.append(word)
         return words
 
