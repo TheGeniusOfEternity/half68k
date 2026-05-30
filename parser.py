@@ -35,12 +35,12 @@ TOKEN_RE = re.compile(
     |(?P<immediate>\#)                                      # immediate operand symbol
     |(?P<lparen>\()                                         # opening bracket
     |(?P<rparen>\))                                         # closing bracket
-    |(?P<plus>\+)                                           # plus (for shifts и post-increment)
+    |(?P<plus>\+)                                           # plus (for shifts and post-increment)
     |(?P<minus>-)                                           # minus (for expressions and pre-decrement)
-    |(?P<ident>[A-Za-z_]\w*)                                # identifier (label, constand)
+    |(?P<ident>[A-Za-z_]\w*)                                # identifier (label, constant)
     |(?P<string>"[^"]*")                                    # string in quotes
     |(?P<comment>;.*)                                       # comment
-    |(?P<whitespace>\s+)                                    # spaces (ingnore)
+    |(?P<whitespace>\s+)                                    # spaces (ignore)
 """,
     re.VERBOSE,
 )
