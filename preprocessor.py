@@ -94,11 +94,17 @@ def preprocess(lines: list[str]) -> list[str]:
             args_def, body = macros[macro_name]
             call_args_str = stripped[len(macro_name) :].strip()
             call_args = [a.strip() for a in call_args_str.split(",") if a.strip()] if call_args_str else []
+
+            # Validate amount of args
+            expected = len(args_def)
+            actual = len(call_args)
+            if expected != actual:
+                raise ValueError(f"Macro '{macro_name}' expects {expected} argument(s), " f"but {actual} were given.")
+
             for body_line in body:
                 new_line = body_line
                 for k, arg_name in enumerate(args_def):
-                    if k < len(call_args):
-                        new_line = re.sub(r"\b" + re.escape(arg_name) + r"\b", call_args[k], new_line)
+                    new_line = re.sub(r"\b" + re.escape(arg_name) + r"\b", call_args[k], new_line)
                 output.append(new_line)
             i += 1
             continue
