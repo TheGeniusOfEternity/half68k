@@ -17,14 +17,18 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install ruff mypy
+          pip install pytest
 
       - name: Run Ruff (linter)
         run: ruff check .
 
       - name: Run Mypy (type checking)
         run: mypy .
+        
+      - name: Run Unit Tests
+        run: pytest tests/test_translator.py
 
-      - name: Run Translator Golden Tests
+      - name: Run Golden Tests
         run: |
           find tests -name '*.s' | while IFS= read -r s_file; do
             echo "Compiling $s_file"
