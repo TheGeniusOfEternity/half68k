@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [push, workflow_dispatch]
 
 jobs:
   lint-and-test:
@@ -24,7 +24,7 @@ jobs:
 
       - name: Run Mypy (type checking)
         run: mypy .
-        
+
       - name: Run Unit Tests
         run: pytest tests/test_translator.py
 
