@@ -44,8 +44,9 @@ def generate_log(program: Program, log_path: Path) -> None:
     for instr in program.code:
         for i, word in enumerate(instr.words):
             lines.append(f"CODE {instr.addr + i:08X} - {format_hex_word(word)} - {instr.mnemonic if i == 0 else ''}")
-    with Path.open(log_path, "w") as f:
-        f.write("\n".join(lines) + "\n")
+    with log_path.open("w") as f:
+        if lines:
+            f.write("\n".join(lines) + "\n")
 
 
 def write_binary(program: Program, bin_path: Path) -> None:
@@ -60,7 +61,7 @@ def write_binary(program: Program, bin_path: Path) -> None:
     for instr in program.code:
         code_words.extend(instr.words)
 
-    with Path.open(bin_path, "wb") as f:
+    with bin_path.open("wb") as f:
         # Header: words of data
         f.write(struct.pack("<I", len(data_words)))
         # Data
@@ -76,12 +77,12 @@ def main() -> None:
         print("Usage: translator.py <input.s> <output.bin>")
         sys.exit(1)
 
-    asm_path = Path(sys.argv[1])
+    src_path = Path(sys.argv[1])
     bin_path = Path(sys.argv[2])
     log_path = bin_path.with_suffix(".log")
 
     # Read source file
-    with Path.open(asm_path, encoding="utf-8") as f:
+    with src_path.open(encoding="utf-8") as f:
         raw_lines = f.readlines()
 
     # Preprocessor
