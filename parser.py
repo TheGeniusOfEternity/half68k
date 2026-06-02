@@ -339,7 +339,7 @@ class Parser:
                 mnemonic, size, operands = self._parse_instruction(tok)
                 instr_size = _calc_instr_size(mnemonic, operands)
                 self.program.code.append(Instruction(mnemonic, size, operands, addrs["code"]))
-                addrs["code"] += instr_size
+                addrs["code"] += instr_size * 4
                 continue
 
             # If token was not matched
