@@ -38,6 +38,9 @@ OPCODES = {
     "bge": 0b100000,
 }
 
+# For reverse match
+REVERSED_OPCODES = {v: k for k, v in OPCODES.items()}
+
 # Instructions without size suffix required
 NO_SIZE_MNEMONICS = {
     "jmp",
@@ -136,3 +139,28 @@ def build_opcode_word(mnemonic: str, size: str, src_mode: int, dst_mode: int, ex
     op = encode_opcode(mnemonic)
     sz = encode_size(size)
     return (op << OPCODE_SHIFT) | (sz << SIZE_SHIFT) | (src_mode << SRC_SHIFT) | (dst_mode << DST_SHIFT) | extra_bits
+
+
+def calc_instr_size_from_modes(opcode: int, src_mode: int, dst_mode: int) -> int:
+    """Computes instruction size in bytes based on opcode and address mode."""
+    mnemonic = REVERSED_OPCODES.get(opcode)
+    if mnemonic in BRANCH_MNEMONICS or mnemonic in ("jmp", "jsr"):
+        return 8
+    size = 4  # opcode
+    # Extensions for src
+    src_type = (src_mode >> 3) & 0x3
+    if src_type == 0:  # imm
+        size += 4
+    elif src_type == 3:  # special
+        sub = src_mode & 0x7
+        if sub in (0, 1, 2, 3):  # postinc, predec, displacement, absolute
+            size += 4
+    # Extensions for dst
+    dst_type = (dst_mode >> 3) & 0x3
+    if dst_type == 0:  # imm
+        size += 4
+    elif dst_type == 3:  # special
+        sub = dst_mode & 0x7
+        if sub in (0, 1, 2, 3):
+            size += 4
+    return size
