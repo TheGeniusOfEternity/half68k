@@ -43,4 +43,43 @@ add_high:
     mv.l    R5, (R0)
     mv.l    #res_hi, R0
     mv.l    R4, (R0)
+
+    ; Print result (res_hi & res_lo)
+    mv.l    (res_hi), R0
+    jsr     print_64_part
+    mv.l    (res_lo), R0
+    jsr     print_64_part
+
     die
+
+print_64_part:
+    mv.l    R5, -(SP)
+    mv.l    R6, -(SP)
+    mv.l    R4, -(SP)
+
+    mv.l    R0, R5            ; R5 – копия числа
+    mv.l    #8, R4            ; Счетчик
+
+loop_print:
+    mv.l    R5, R6            ; R6 – рабочая копия
+    lsr.l   #28, R6
+    and.l   #0xF, R6
+
+    cmp.l   #10, R6
+    blt     is_digit_p
+    add.l   #55, R6
+    jmp     print_it_p
+is_digit_p:
+    add.l   #48, R6
+print_it_p:
+    mv.b    R6, (OUT_PORT)
+
+    lsl.l   #4, R5
+    sub.l   #1, R4
+    cmp.l   #0, R4
+    bne     loop_print
+
+    mv.l    (SP)+, R4
+    mv.l    (SP)+, R6
+    mv.l    (SP)+, R5
+    rts
