@@ -1,7 +1,12 @@
 .idea
 .venv
 .DS_Store
+__pycache__
 
-tests/**/*
+tests/**/*.bin
+tests/**/*.log
+
 !tests/**/golden.log
-!tests/**/*.bin
+
+input.txt
+journal.log
