@@ -1,8 +1,9 @@
 import re
 
 
-def preprocess(lines: list[str]) -> list[str]:
-    defines: dict[str, str] = {}
+def preprocess(lines: list[str], defines: dict[str, str] | None = None) -> list[str]:
+    if defines is None:
+        defines = {}
     macros: dict[str, tuple[list[str], list[str]]] = {}
     output: list[str] = []
 
