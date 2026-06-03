@@ -75,21 +75,28 @@ def write_binary(program: Program, bin_path: Path) -> None:
 
 
 def main() -> None:
-    args_num = 3
-    if len(sys.argv) != args_num:
-        print("Usage: translator.py <input.s> <output.bin>")
+    if len(sys.argv) < 3:
+        print("Usage: translator.py <input.s> <output.bin> [-DNAME1] [-DNAME2] ...")
         sys.exit(1)
 
     src_path = Path(sys.argv[1])
     bin_path = Path(sys.argv[2])
     log_path = bin_path.with_suffix(".log")
 
+    # Collect flags: args that start with -D
+    defines = {}
+    for arg in sys.argv[3:]:
+        if arg.startswith("-D"):
+            flag_name = arg[2:]
+            if flag_name:
+                defines[flag_name] = "1"
+
     # Read source file
     with src_path.open(encoding="utf-8") as f:
         raw_lines = f.readlines()
 
     # Preprocessor
-    processed_lines = preprocess(raw_lines)
+    processed_lines = preprocess(raw_lines, defines=defines)
 
     # Parser
     parser = Parser(processed_lines)
@@ -98,7 +105,7 @@ def main() -> None:
     # Output files generation
     write_binary(program, bin_path)
     generate_log(program, log_path)
-    print(f"Translation complete: {bin_path}, {log_path}")
+    print(f"Translation complete: {bin_path}, {log_path} (Flags: {list(defines.keys())})")
 
 
 if __name__ == "__main__":
