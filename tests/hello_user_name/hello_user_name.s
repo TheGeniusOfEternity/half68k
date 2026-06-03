@@ -16,6 +16,9 @@ start:
     mv.l    #prompt, R0       ; set prompt pointer to R0
     jsr     print_string      ; goto procedure print_string
 
+    mv.b    #0x0A, R0         ; add newline
+    mv.b    R0, (OUT_PORT)
+
     ; Read name into name_buf
     mv.l    #name_buf, R1     ; buffer pointer
     mv.l    #0, R2            ; symbols counter
@@ -37,12 +40,13 @@ read_loop:
 
 read_done:
     ; Print "Hello, "
+    mv.l    R2, R4
     mv.l    #greeting, R0     ; set greeting pointer to R0
     jsr     print_string      ; goto procedure print_string
 
     ; Print name_buf (R2 symbols)
     mv.l    #name_buf, R1     ; buffer pointer
-    mv.l    R2, R3            ; counter
+    mv.l    R4, R3            ; counter
 
 name_print_loop:
     cmp.l   #0, R3            ; compare counter with 0
