@@ -64,6 +64,9 @@ def write_binary(program: Program, bin_path: Path) -> None:
     with bin_path.open("wb") as f:
         # Header: words of data
         f.write(struct.pack("<I", len(data_words)))
+        # Header: code start address
+        code_start_addr = program.code[0].addr if program.code else 0
+        f.write(struct.pack("<I", code_start_addr))
         # Data
         for word in data_words:
             f.write(struct.pack("<I", word & 0xFFFFFFFF))
