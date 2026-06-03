@@ -314,20 +314,20 @@ class Parser:
                         while tok.peek() is not None:
                             # Parse expression without computation, if label — save token as string
                             self._parse_data_operand(tok, item)
-                            addrs["data"] += 1
+                            addrs["data"] += 4
                             if tok.maybe("comma") is None:
                                 break
                     elif directive == "dw":
                         while tok.peek() is not None:
                             self._parse_data_operand(tok, item)
-                            addrs["data"] += 1
+                            addrs["data"] += 4
                             if tok.maybe("comma") is None:
                                 break
                     elif directive == "pstr":
                         str_tok = tok.expect("string")
                         s = str_tok.value[1:-1]
                         item.values.append(s)
-                        addrs["data"] += 1 + len(s)
+                        addrs["data"] += (1 + len(s)) * 4
                     else:
                         raise SyntaxError(f"Unknown data directive: {directive}")
                     self.program.data_items.append(item)
