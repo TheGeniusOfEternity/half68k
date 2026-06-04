@@ -42,14 +42,20 @@ outer_loop:
 inner_loop:
     cmp.l   R6, R5
     bge     next_outer
+
     mv.l    #array, R1
-    add.l   R5, R1
+    mv.l    R5, R3
+    mul.l   #4, R3
+    add.l   R3, R1
+
     mv.l    (R1), R0          ; a[j]
-    mv.l    1(R1), R3         ; a[j+1]
+    mv.l    4(R1), R3         ; a[j+1]
+
     cmp.l   R3, R0
     ble     no_swap
+
     mv.l    R3, (R1)
-    mv.l    R0, 1(R1)
+    mv.l    R0, 4(R1)
 no_swap:
     add.l   #1, R5
     jmp     inner_loop
@@ -64,12 +70,15 @@ print_array:
 print_loop:
     cmp.l   #0, R2
     beq     done
-    mv.b    (R1)+, R0
-    add.b   #'0', R0
+
+    mv.l    (R1)+, R0
+    add.l   #0x30, R0
     mv.b    R0, (OUT_PORT)
+
     sub.l   #1, R2
     cmp.l   #0, R2
     beq     done
+
     mv.b    #0x20, R0
     mv.b    R0, (OUT_PORT)
     jmp     print_loop
