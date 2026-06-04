@@ -189,14 +189,38 @@ class ControlUnit:
         self.mc.add(
             "mv_reg_postinc", [[MicroOp("LOAD_REG_EXT", "DST")], [MicroOp("FETCH_DST_ADDR")], [MicroOp("WRITE_MEM", "SRC_REG")], [MicroOp("POSTINC_DST")]]
         )
+        # displacement source -> register
+        self.mc.add(
+            "mv_src_displacement_reg",
+            [
+                [MicroOp("LOAD_REG_EXT", "SRC")],
+                [MicroOp("FETCH_DISPLACEMENT_ADDR")],
+                [MicroOp("READ_MEM")],
+                [MicroOp("EXEC", "MOV", "MEM", "DST_REG")],
+            ],
+        )
+        # register -> displacement destination
+        self.mc.add(
+            "mv_reg_disp_dst",
+            [
+                [MicroOp("LOAD_REG_EXT", "DST")],
+                [MicroOp("FETCH_DISPLACEMENT_ADDR_DST")],
+                [MicroOp("WRITE_MEM", "SRC_REG")],
+            ],
+        )
 
-        # Arithmetic & Logic
-        for op in ("add", "sub", "cmp", "and", "or", "xor"):
+        # Arithmetic & Logic for imm & reg
+        for op in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div"):
             self.mc.add(f"{op}_imm_reg", [[MicroOp("LOAD_IMM_EXT")], [MicroOp("EXEC", op.upper(), "IMM", "DST_REG")]])
             self.mc.add(f"{op}_reg_reg", [[MicroOp("EXEC", op.upper(), "SRC_REG", "DST_REG")]])
 
-        # Unary & Shifts
-        for op in ("clr", "not", "neg", "asl", "asr", "lsl", "lsr"):
+        # Shifts for imm & reg
+        for op in ("lsr", "lsl", "asr", "asl"):
+            self.mc.add(f"{op}_imm_reg", [[MicroOp("LOAD_IMM_EXT")], [MicroOp("EXEC", op.upper(), "IMM", "DST_REG")]])
+            self.mc.add(f"{op}_reg_reg", [[MicroOp("EXEC", op.upper(), "SRC_REG", "DST_REG")]])
+
+        # Unary (only reg)
+        for op in ("clr", "not", "neg"):
             self.mc.add(f"{op}_reg", [[MicroOp("EXEC", op.upper(), "NONE", "DST_REG")]])
 
     def fetch_micro_instr(self) -> list[MicroOp] | None:
@@ -269,12 +293,14 @@ class ControlUnit:
                         self.proc.dp.dst_reg = dst_mode & 0x7
                     elif dst_type == 3:  # special
                         sub_mode = dst_mode & 0x7
-                        if sub_mode == 3:  # absolute
-                            self.current_microprogram = self.mc.get("mv_reg_absolute")
-                        elif sub_mode == 0:  # postinc
+                        if sub_mode == 0:  # postinc
                             self.current_microprogram = self.mc.get("mv_reg_postinc")
                         elif sub_mode == 1:  # predec
                             self.current_microprogram = self.mc.get("mv_reg_predec")
+                        elif sub_mode == 2:  # d(Rn)
+                            self.current_microprogram = self.mc.get("mv_reg_disp_dst")
+                        elif sub_mode == 3:  # absolute
+                            self.current_microprogram = self.mc.get("mv_reg_absolute")
                         else:
                             raise NotImplementedError("Unsupported mv dst special mode")
                     else:
@@ -287,6 +313,9 @@ class ControlUnit:
                     sub_mode = src_mode & 0x7
                     if sub_mode == 0:  # (Rn)+
                         self.current_microprogram = self.mc.get("mv_postinc_reg")
+                        self.proc.dp.dst_reg = dst_mode & 0x7
+                    elif sub_mode == 2:  # d(Rn)
+                        self.current_microprogram = self.mc.get("mv_src_displacement_reg")
                         self.proc.dp.dst_reg = dst_mode & 0x7
                     elif sub_mode == 3:  # (abs)
                         self.current_microprogram = self.mc.get("mv_absolute_reg")
@@ -316,7 +345,7 @@ class ControlUnit:
                     self.current_microprogram = self.mc.get("branch_taken")
                 else:
                     self.current_microprogram = self.mc.get("branch_not_taken")
-            elif mnemonic in ("add", "sub", "cmp", "and", "or", "xor"):
+            elif mnemonic in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div") or mnemonic in ("lsr", "lsl", "asr", "asl"):
                 src_type = (src_mode >> 3) & 0x3
                 if src_type == 0:  # imm
                     self.current_microprogram = self.mc.get(f"{mnemonic}_imm_reg")
@@ -327,19 +356,6 @@ class ControlUnit:
                     self.current_microprogram = self.mc.get(f"{mnemonic}_reg_reg")
                 else:
                     raise NotImplementedError(f"Unsupported {mnemonic} src type")
-
-            elif mnemonic in ("clr", "not", "neg", "asl", "asr", "lsl", "lsr"):
-                self.proc.dp.dst_reg = dst_mode & 0x7
-                self.current_microprogram = self.mc.get(f"{mnemonic}_reg")
-            elif mnemonic == "div":
-                src_val = self.proc.dp.get_reg(self.proc.dp.src_reg)
-                dst_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
-                if src_val == 0:
-                    result = 0
-                else:
-                    result = dst_val // src_val
-                self.proc.dp.set_reg(self.proc.dp.dst_reg, result)
-                self.proc.dp.update_flags(result, size="l")
 
             elif mnemonic in ("jmp", "jsr", "rts", "die"):
                 self.current_microprogram = self.mc.get(mnemonic)
@@ -396,6 +412,21 @@ class ControlUnit:
             self.proc.dp.mem_addr = self.proc.dp.get_reg(self.proc.dp.src_reg)
         elif op == "FETCH_DST_ADDR":
             self.proc.dp.mem_addr = self.proc.dp.get_reg(self.proc.dp.dst_reg)
+        elif op == "FETCH_DISPLACEMENT_ADDR":
+            ext_word = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset - 4, 0)
+            displacement = ext_word & 0xFFFF
+            if displacement & 0x8000:  # If handling negative displacement
+                displacement -= 0x10000
+            base_reg_val = self.proc.dp.get_reg(self.proc.dp.src_reg)
+            self.proc.dp.mem_addr = base_reg_val + displacement
+        elif op == "FETCH_DISPLACEMENT_ADDR_DST":
+            # for displacement mode in dst
+            ext_word = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset - 4, 0)
+            displacement = ext_word & 0xFFFF
+            if displacement & 0x8000:
+                displacement -= 0x10000
+            base_reg_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
+            self.proc.dp.mem_addr = base_reg_val + displacement
         elif op == "POSTINC_SRC":
             reg = self.proc.dp.src_reg
             self.proc.dp.set_reg(reg, self.proc.dp.get_reg(reg) + 4)
@@ -429,7 +460,7 @@ class ControlUnit:
                 if dst == "DST_REG":
                     self.proc.dp.set_reg(self.proc.dp.dst_reg, val)
                 self.proc.dp.update_flags(val, size=("b" if self.proc.dp.size == 1 else "l"))
-            elif cmd in ("ADD", "SUB", "CMP", "AND", "OR", "XOR"):
+            elif cmd in ("ADD", "SUB", "CMP", "AND", "OR", "XOR", "MUL", "DIV"):
                 src_type = micro_op.args[1]
                 if src_type == "IMM":
                     operand = self.proc.dp.imm
@@ -452,6 +483,13 @@ class ControlUnit:
                     result = dst_val | operand
                 elif cmd == "XOR":
                     result = dst_val ^ operand
+                elif cmd == "MUL":
+                    result = dst_val * operand
+                elif cmd == "DIV":
+                    if operand == 0:
+                        result = 0
+                    else:
+                        result = dst_val // operand
                 else:
                     raise NotImplementedError(f"Unsupported command: {cmd}")
 
@@ -461,6 +499,12 @@ class ControlUnit:
 
             elif cmd in ("CLR", "NOT", "NEG", "ASL", "ASR", "LSL", "LSR"):
                 dst_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
+                # Define shift amount
+                if len(micro_op.args) >= 2 and micro_op.args[1] == "IMM":
+                    shift_amount = self.proc.dp.imm
+                else:
+                    shift_amount = 1
+
                 if cmd == "CLR":
                     result = 0
                 elif cmd == "NOT":
@@ -468,29 +512,22 @@ class ControlUnit:
                 elif cmd == "NEG":
                     result = -dst_val
                 elif cmd in ("ASL", "LSL"):
-                    result = dst_val << 1
-                elif cmd in ("ASR", "LSR"):
-                    result = dst_val >> 1
+                    result = (dst_val << shift_amount) & 0xFFFFFFFF
+                elif cmd == "ASR":
+                    if dst_val & 0x80000000:
+                        result = (dst_val >> shift_amount) | (0xFFFFFFFF << (32 - shift_amount))
+                    else:
+                        result = dst_val >> shift_amount
+                elif cmd == "LSR":
+                    result = (dst_val & 0xFFFFFFFF) >> shift_amount
                 else:
                     raise NotImplementedError(f"Unsupported shift/clear command: {cmd}")
 
                 self.proc.dp.update_flags(result, size=("b" if self.proc.dp.size == 1 else "l"))
                 self.proc.dp.set_reg(self.proc.dp.dst_reg, result)
-            elif cmd == "MUL":
-                src_val = self.proc.dp.get_reg(self.proc.dp.src_reg)
-                dst_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
-                result = dst_val * src_val
+
+                self.proc.dp.update_flags(result, size=("b" if self.proc.dp.size == 1 else "l"))
                 self.proc.dp.set_reg(self.proc.dp.dst_reg, result)
-                self.proc.dp.update_flags(result, size="l")
-            elif cmd == "DIV":
-                src_val = self.proc.dp.get_reg(self.proc.dp.src_reg)
-                dst_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
-                if src_val == 0:
-                    result = 0
-                else:
-                    result = dst_val // src_val
-                self.proc.dp.set_reg(self.proc.dp.dst_reg, result)
-                self.proc.dp.update_flags(result, size="l")
         elif op == "SET_PC":
             if micro_op.args[0] == "IMM":
                 self.proc.dp.pc = self.proc.dp.imm
