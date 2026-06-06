@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Half68k Processor Model
-Usage: python machine.py <binary_file> [input_file]
+Usage: python machine.py <binary_file> [input_file] [--no-superscalar]
 """
 
+import argparse
 import struct
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,23 +46,12 @@ class Flags:
 
 class DataPath:
     def __init__(self) -> None:
+        # Global state
         self.regs = [0] * 8
         self.regs[7] = (DATA_MEM_SIZE * 4) - 4
         self.pc = 0
         self.flags = Flags()
-        self.imm = 0
-        self.mem_addr = 0
-        self.mem_data = 0
-        self.alu_out = 0
-        self.opcode = 0
-        self.size = 0
-        self.src_mode = 0
-        self.dst_mode = 0
-        self.src_reg = 0
-        self.dst_reg = 0
         self.pc_modified = False
-        self.ext_offset = 0
-        self.branch_cond = ""
 
     def set_reg(self, idx: int, val: int) -> None:
         self.regs[idx] = val & 0xFFFFFFFF
@@ -86,8 +75,35 @@ class DataPath:
             self.flags.V = ((a_masked ^ res_masked) & ((~b_masked) & mask ^ res_masked) & sign_mask) != 0
 
 
+class LaneState:
+    """State of the separate execution lane"""
+
+    def __init__(self, lane_id: int):
+        self.lane_id = lane_id
+        self.active = False
+        self.instr_pc = 0
+        self.micro_pc = 0
+        self.current_microprogram: list[list[MicroOp]] | None = None
+        self.instr_done = False
+        self.instr_size = 0
+        self.mnemonic = ""
+
+        # Local state of the instruction
+        self.imm = 0
+        self.mem_addr = 0
+        self.mem_data = 0
+        self.opcode = 0
+        self.size = 0
+        self.src_mode = 0
+        self.dst_mode = 0
+        self.src_reg = 0
+        self.dst_reg = 0
+        self.ext_offset = 0
+        self.branch_cond = ""
+
+
 class Processor:
-    def __init__(self, code: dict[int, int], data: list[int], code_start: int, input_buffer: bytes) -> None:
+    def __init__(self, code: dict[int, int], data: list[int], code_start: int, input_buffer: bytes, superscalar: bool = True) -> None:
         self.code = code
         self.data_mem = bytearray(DATA_MEM_SIZE * 4)
         for i, w in enumerate(data):
@@ -97,17 +113,36 @@ class Processor:
         self.input_pos = 0
         self.dp = DataPath()
         self.dp.pc = code_start
-        self.cu = ControlUnit(self)
+        self.cu = ControlUnit(self, superscalar)
         self.clock = 0
         self.instr_count = 0
-        self.current_mnemonic = ""
         self.halted = False
         self.log_lines: list[str] = []
+
+    @staticmethod
+    def _analyze_operand(mode: int, reg: int, is_dst: bool) -> tuple[set[int], set[int], bool]:
+        reads, writes, mem = set(), set(), False
+
+        # mode 0: Immediate - read only (src)
+        if mode == 0:
+            pass
+            # mode 1: Register
+        elif mode == 1:
+            if is_dst:
+                writes.add(reg)
+            else:
+                reads.add(reg)
+        # mode 2: Register Indirect - (Rn)
+        elif mode in (2, 3):
+            reads.add(reg)
+            mem = True
+
+        return reads, writes, mem
 
     def read_data_word(self, addr: int) -> int:
         if addr == IN_PORT:
             if self.input_pos >= len(self.input_buffer):
-                return 0  # end of stream, return 0 but don't halt
+                return 0
             b = self.input_buffer[self.input_pos]
             self.input_pos += 1
             return b
@@ -142,19 +177,19 @@ class Processor:
             f.write("\n".join(self.log_lines) + "\n")
 
     def _log(self) -> None:
-        self.log_lines.append(f"Tick: {self.clock:04d} | PC: {self.dp.pc:04X} | " f"SP: {self.dp.regs[7]:08X} | Exec: {self.current_mnemonic}")
+        exec_str = ", ".join([f"{lane.mnemonic} (L{lane.lane_id})" for lane in self.cu.lanes if lane.active])
+        if not exec_str:
+            exec_str = "IDLE"
+        self.log_lines.append(f"Tick: {self.clock:04d} | PC: {self.dp.pc:04X} | SP: {self.dp.regs[7]:08X} | Exec: {exec_str}")
 
 
 class ControlUnit:
-    def __init__(self, proc: Processor) -> None:
+    def __init__(self, proc: Processor, superscalar: bool = True) -> None:
         self.proc = proc
         self.mc = MicrocodeMemory()
         self._init_microcode()
-        self.current_microprogram: list[list[MicroOp]] | None = None
-        self.micro_pc = 0
-        self.current_micro_ops: list[MicroOp] = []
-        self.instr_done = False
-        self.instr_size = 0
+        self.superscalar = superscalar
+        self.lanes = [LaneState(0), LaneState(1)]
 
     def _init_microcode(self) -> None:
         # Basic
@@ -187,25 +222,11 @@ class ControlUnit:
         self.mc.add(
             "mv_reg_postinc", [[MicroOp("LOAD_REG_EXT", "DST")], [MicroOp("FETCH_DST_ADDR")], [MicroOp("WRITE_MEM", "SRC_REG")], [MicroOp("POSTINC_DST")]]
         )
-        # displacement source -> register
         self.mc.add(
             "mv_src_displacement_reg",
-            [
-                [MicroOp("LOAD_REG_EXT", "SRC")],
-                [MicroOp("FETCH_DISPLACEMENT_ADDR")],
-                [MicroOp("READ_MEM")],
-                [MicroOp("EXEC", "MOV", "MEM", "DST_REG")],
-            ],
+            [[MicroOp("LOAD_REG_EXT", "SRC")], [MicroOp("FETCH_DISPLACEMENT_ADDR")], [MicroOp("READ_MEM")], [MicroOp("EXEC", "MOV", "MEM", "DST_REG")]],
         )
-        # register -> displacement destination
-        self.mc.add(
-            "mv_reg_disp_dst",
-            [
-                [MicroOp("LOAD_REG_EXT", "DST")],
-                [MicroOp("FETCH_DISPLACEMENT_ADDR_DST")],
-                [MicroOp("WRITE_MEM", "SRC_REG")],
-            ],
-        )
+        self.mc.add("mv_reg_disp_dst", [[MicroOp("LOAD_REG_EXT", "DST")], [MicroOp("FETCH_DISPLACEMENT_ADDR_DST")], [MicroOp("WRITE_MEM", "SRC_REG")]])
 
         # Arithmetic & Logic for imm & reg
         for op in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div"):
@@ -221,111 +242,222 @@ class ControlUnit:
         for op in ("clr", "not", "neg"):
             self.mc.add(f"{op}_reg", [[MicroOp("EXEC", op.upper(), "NONE", "DST_REG")]])
 
-    def fetch_micro_instr(self) -> list[MicroOp] | None:
-        if self.current_microprogram is None or self.micro_pc >= len(self.current_microprogram):
-            return None
-        return self.current_microprogram[self.micro_pc]
-
     def step(self) -> None:
-        if self.instr_done:
-            self._advance_pc()
-            self.instr_done = False
-            self.current_microprogram = None
-            return
-        if self.current_microprogram is None:
-            self.proc.instr_count += 1
-            self._start_next_instruction()
-            return
-        micro_step = self.fetch_micro_instr()
-        if micro_step is None:
-            self.instr_done = True
-            return
-        self.current_micro_ops = micro_step
-        for micro_op in micro_step:
-            self._execute_micro_op(micro_op)
-        self.micro_pc += 1
+        # 1. Clear retired instructions from previous tick
+        all_done = True
+        has_active = False
+        for lane in self.lanes:
+            if lane.active:
+                has_active = True
+                if not lane.instr_done:
+                    all_done = False
 
-    def _advance_pc(self) -> None:
-        if self.proc.dp.pc_modified:
-            self.proc.dp.pc_modified = False
-            return
-        self.proc.dp.pc += self.instr_size
+        if has_active and all_done:
+            if self.proc.dp.pc_modified:
+                self.proc.dp.pc_modified = False
+            else:
+                advance = sum(lane.instr_size for lane in self.lanes if lane.active)
+                self.proc.dp.pc += advance
 
-    def _start_next_instruction(self) -> None:
-        self.micro_pc = 0
+            for lane in self.lanes:
+                lane.active = False
+                lane.instr_done = False
+                lane.current_microprogram = None
+
+        # 2.If all lanes are inactive then issue new instructions
+        if all(not lane.active for lane in self.lanes):
+            self._issue_instructions()
+            if all(not lane.active for lane in self.lanes):
+                return
+
+        # 3. Execute microcode
+        for lane in self.lanes:
+            if lane.active and not lane.instr_done:
+                micro_step = self._fetch_micro_instr(lane)
+                if micro_step is not None:
+                    for micro_op in micro_step:
+                        self._execute_micro_op(micro_op, lane)
+                    lane.micro_pc += 1
+
+                # Check if complete immediately after microcode step execution
+                if lane.current_microprogram is None or lane.micro_pc >= len(lane.current_microprogram):
+                    lane.instr_done = True
+
+    @staticmethod
+    def _fetch_micro_instr(lane: LaneState) -> list[MicroOp] | None:
+        if lane.current_microprogram is None or lane.micro_pc >= len(lane.current_microprogram):
+            return None
+        return lane.current_microprogram[lane.micro_pc]
+
+    @staticmethod
+    def _get_deps(raw: int) -> tuple[set[int], set[int], bool, bool]:
+        """Searches for dependencies in instruction before injecting onto the lane"""
+        opcode = (raw >> OPCODE_SHIFT) & 0x3F
+        src_mode = (raw >> SRC_SHIFT) & 0x1F
+        dst_mode = (raw >> DST_SHIFT) & 0x1F
+
+        reads, writes = set(), set()
+        mem, ctrl = False, False
+
+        mnemonic = REVERSED_OPCODES.get(opcode, "")
+        if mnemonic in ("jmp", "jsr", "rts", "die", "beq", "bne", "bcc", "bcs", "bmi", "bpl", "bvs", "bvc", "blt", "ble", "bgt", "bge"):
+            ctrl = True
+
+        src_type = (src_mode >> 3) & 0x3
+        src_reg = src_mode & 0x7
+        dst_type = (dst_mode >> 3) & 0x3
+        dst_reg = dst_mode & 0x7
+
+        # Check src
+        if src_type == 1:
+            reads.add(src_reg)
+        elif src_type == 2:
+            reads.add(src_reg)
+            mem = True
+        elif src_type == 3:
+            sub = src_mode & 0x7
+            if sub in (0, 1):
+                reads.add(src_reg)
+                writes.add(src_reg)
+                mem = True
+            elif sub == 2:
+                reads.add(src_reg)
+                mem = True
+            elif sub == 3:
+                mem = True
+
+        # Check dst
+        if mnemonic in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div"):
+            if dst_type == 1:
+                reads.add(dst_reg)
+                writes.add(dst_reg)
+        elif mnemonic == "mv":
+            if dst_type == 1:
+                writes.add(dst_reg)
+            elif dst_type == 2:
+                reads.add(dst_reg)
+                mem = True
+            elif dst_type == 3:
+                sub = dst_mode & 0x7
+                if sub in (0, 1):
+                    reads.add(dst_reg)
+                    writes.add(dst_reg)
+                    mem = True
+                elif sub == 2:
+                    reads.add(dst_reg)
+                    mem = True
+                elif sub == 3:
+                    mem = True
+
+        if mnemonic in ("lsr", "lsl", "asr", "asl", "clr", "not", "neg"):
+            reads.add(dst_reg)
+            writes.add(dst_reg)
+
+        return reads, writes, mem, ctrl
+
+    def _issue_instructions(self) -> None:
+        """Superscalar issue logic (up to 2 independent instructions)"""
         pc = self.proc.dp.pc
-        raw = self.proc.code.get(pc, 0)
-        if raw == 0 and pc != 0:
+        raw1 = self.proc.code.get(pc, 0)
+        if raw1 == 0 and pc != 0:
             self.proc.halted = True
             return
+
+        # Decode first instruction onto Lane 0
+        self._decode_to_lane(raw1, pc, self.lanes[0])
+
+        if self.superscalar:
+            reads1, writes1, mem1, ctrl1 = self._get_deps(raw1)
+            # Control instructions are executed strictly one by one
+            if not ctrl1:
+                pc2 = pc + self.lanes[0].instr_size
+                raw2 = self.proc.code.get(pc2, 0)
+                if raw2 != 0:
+                    reads2, writes2, mem2, ctrl2 = self._get_deps(raw2)
+                    if not ctrl2:
+                        # Conflict check (RAW, WAR, WAW, memory structure)
+                        conflict = False
+                        if reads1.intersection(writes2) or writes1.intersection(reads2) or writes1.intersection(writes2):
+                            conflict = True
+                        if mem1 and mem2:  # restrict two memory usages at the same time
+                            conflict = True
+
+                        if not conflict:
+                            # Both are independent - send second instruction onto Lane 1
+                            self._decode_to_lane(raw2, pc2, self.lanes[1])
+
+    def _decode_to_lane(self, raw: int, pc: int, lane: LaneState) -> None:
+        self.proc.instr_count += 1
         opcode = (raw >> OPCODE_SHIFT) & 0x3F
         size = (raw >> SIZE_SHIFT) & 1
         src_mode = (raw >> SRC_SHIFT) & 0x1F
         dst_mode = (raw >> DST_SHIFT) & 0x1F
-        self.proc.dp.opcode = opcode
-        self.proc.dp.size = size
-        self.proc.dp.src_mode = src_mode
-        self.proc.dp.dst_mode = dst_mode
-        self.proc.dp.src_reg = 0
-        self.proc.dp.dst_reg = 0
-        self.proc.dp.pc_modified = False
-        self.proc.dp.ext_offset = 4
-        self.proc.dp.branch_cond = ""
 
-        self.instr_size = calc_instr_size_from_modes(opcode, src_mode, dst_mode)
+        lane.active = True
+        lane.instr_pc = pc
+        lane.micro_pc = 0
+        lane.opcode = opcode
+        lane.size = size
+        lane.src_mode = src_mode
+        lane.dst_mode = dst_mode
+        lane.src_reg = 0
+        lane.dst_reg = 0
+        lane.ext_offset = 4
+        lane.branch_cond = ""
+        lane.instr_size = calc_instr_size_from_modes(opcode, src_mode, dst_mode)
 
         mnemonic = REVERSED_OPCODES.get(opcode)
-        self.proc.current_mnemonic = mnemonic if mnemonic else "???"
+        lane.mnemonic = mnemonic if mnemonic else "???"
 
         if mnemonic is not None:
             if mnemonic == "die":
                 self.proc.halted = True
-                self.instr_done = True
-                self.current_mnemonic = "die"
+                lane.instr_done = True
+                lane.current_microprogram = self.mc.get("die")
                 return
             if mnemonic == "mv":
                 src_type = (src_mode >> 3) & 0x3
                 dst_type = (dst_mode >> 3) & 0x3
-                if src_type == 0:  # imm
-                    self.current_microprogram = self.mc.get("mv_imm_reg")
-                    self.proc.dp.dst_reg = dst_mode & 0x7
-                elif src_type == 1:  # reg
-                    self.proc.dp.src_reg = src_mode & 0x7
+                if src_type == 0:
+                    lane.current_microprogram = self.mc.get("mv_imm_reg")
+                    lane.dst_reg = dst_mode & 0x7
+                elif src_type == 1:
+                    lane.src_reg = src_mode & 0x7
                     if dst_type == 1:
-                        self.current_microprogram = self.mc.get("mv_reg_reg")
-                        self.proc.dp.dst_reg = dst_mode & 0x7
+                        lane.current_microprogram = self.mc.get("mv_reg_reg")
+                        lane.dst_reg = dst_mode & 0x7
                     elif dst_type == 2:
-                        self.current_microprogram = self.mc.get("mv_reg_indirect")
-                        self.proc.dp.dst_reg = dst_mode & 0x7
-                    elif dst_type == 3:  # special
+                        lane.current_microprogram = self.mc.get("mv_reg_indirect")
+                        lane.dst_reg = dst_mode & 0x7
+                    elif dst_type == 3:
                         sub_mode = dst_mode & 0x7
-                        if sub_mode == 0:  # postinc
-                            self.current_microprogram = self.mc.get("mv_reg_postinc")
-                        elif sub_mode == 1:  # predec
-                            self.current_microprogram = self.mc.get("mv_reg_predec")
-                        elif sub_mode == 2:  # d(Rn)
-                            self.current_microprogram = self.mc.get("mv_reg_disp_dst")
-                        elif sub_mode == 3:  # absolute
-                            self.current_microprogram = self.mc.get("mv_reg_absolute")
+                        if sub_mode == 0:
+                            lane.current_microprogram = self.mc.get("mv_reg_postinc")
+                        elif sub_mode == 1:
+                            lane.current_microprogram = self.mc.get("mv_reg_predec")
+                        elif sub_mode == 2:
+                            lane.current_microprogram = self.mc.get("mv_reg_disp_dst")
+                        elif sub_mode == 3:
+                            lane.current_microprogram = self.mc.get("mv_reg_absolute")
                         else:
                             raise NotImplementedError("Unsupported mv dst special mode")
                     else:
                         raise NotImplementedError("Unsupported mv - dst type")
-                elif src_type == 2:  # indirect (Rn)
-                    self.proc.dp.src_reg = src_mode & 0x7
-                    self.current_microprogram = self.mc.get("mv_indirect_reg")
-                    self.proc.dp.dst_reg = dst_mode & 0x7
-                elif src_type == 3:  # special
+                elif src_type == 2:
+                    lane.src_reg = src_mode & 0x7
+                    lane.current_microprogram = self.mc.get("mv_indirect_reg")
+                    lane.dst_reg = dst_mode & 0x7
+                elif src_type == 3:
                     sub_mode = src_mode & 0x7
-                    if sub_mode == 0:  # (Rn)+
-                        self.current_microprogram = self.mc.get("mv_postinc_reg")
-                        self.proc.dp.dst_reg = dst_mode & 0x7
-                    elif sub_mode == 2:  # d(Rn)
-                        self.current_microprogram = self.mc.get("mv_src_displacement_reg")
-                        self.proc.dp.dst_reg = dst_mode & 0x7
-                    elif sub_mode == 3:  # (abs)
-                        self.current_microprogram = self.mc.get("mv_absolute_reg")
-                        self.proc.dp.dst_reg = dst_mode & 0x7
+                    if sub_mode == 0:
+                        lane.current_microprogram = self.mc.get("mv_postinc_reg")
+                        lane.dst_reg = dst_mode & 0x7
+                    elif sub_mode == 2:
+                        lane.current_microprogram = self.mc.get("mv_src_displacement_reg")
+                        lane.dst_reg = dst_mode & 0x7
+                    elif sub_mode == 3:
+                        lane.current_microprogram = self.mc.get("mv_absolute_reg")
+                        lane.dst_reg = dst_mode & 0x7
                     else:
                         raise NotImplementedError(f"Unsupported mv special src mode: {sub_mode}")
                 else:
@@ -345,26 +477,22 @@ class ControlUnit:
                     "ble": "LE",
                     "bgt": "GT",
                 }
-                self.proc.dp.branch_cond = cond_map.get(mnemonic, "")
-                take = self._eval_condition(self.proc.dp.branch_cond)
-                if take:
-                    self.current_microprogram = self.mc.get("branch_taken")
-                else:
-                    self.current_microprogram = self.mc.get("branch_not_taken")
+                lane.branch_cond = cond_map.get(mnemonic, "")
+                take = self._eval_condition(lane.branch_cond)
+                lane.current_microprogram = self.mc.get("branch_taken") if take else self.mc.get("branch_not_taken")
             elif mnemonic in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div") or mnemonic in ("lsr", "lsl", "asr", "asl"):
                 src_type = (src_mode >> 3) & 0x3
-                if src_type == 0:  # imm
-                    self.current_microprogram = self.mc.get(f"{mnemonic}_imm_reg")
-                    self.proc.dp.dst_reg = dst_mode & 0x7
-                elif src_type == 1:  # reg
-                    self.proc.dp.src_reg = src_mode & 0x7
-                    self.proc.dp.dst_reg = dst_mode & 0x7
-                    self.current_microprogram = self.mc.get(f"{mnemonic}_reg_reg")
+                if src_type == 0:
+                    lane.current_microprogram = self.mc.get(f"{mnemonic}_imm_reg")
+                    lane.dst_reg = dst_mode & 0x7
+                elif src_type == 1:
+                    lane.src_reg = src_mode & 0x7
+                    lane.dst_reg = dst_mode & 0x7
+                    lane.current_microprogram = self.mc.get(f"{mnemonic}_reg_reg")
                 else:
                     raise NotImplementedError(f"Unsupported {mnemonic} src type")
-
             elif mnemonic in ("jmp", "jsr", "rts", "die"):
-                self.current_microprogram = self.mc.get(mnemonic)
+                lane.current_microprogram = self.mc.get(mnemonic)
         else:
             raise NotImplementedError(f"Unknown opcode: {opcode:06b}")
 
@@ -396,87 +524,85 @@ class ControlUnit:
             return (not flags.Z) and (flags.N == flags.V)
         return False
 
-    def _execute_micro_op(self, micro_op: MicroOp) -> None:
+    def _execute_micro_op(self, micro_op: MicroOp, lane: LaneState) -> None:
         op = micro_op.op
         if op == "HALT":
             self.proc.halted = True
-            self.instr_done = True
+            lane.instr_done = True
         elif op == "LOAD_IMM_EXT":
-            self.proc.dp.imm = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset, 0)
-            self.proc.dp.ext_offset += 4
+            lane.imm = self.proc.code.get(lane.instr_pc + lane.ext_offset, 0)
+            lane.ext_offset += 4
         elif op == "LOAD_ABS_ADDR_EXT":
-            self.proc.dp.mem_addr = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset, 0)
-            self.proc.dp.ext_offset += 4
+            lane.mem_addr = self.proc.code.get(lane.instr_pc + lane.ext_offset, 0)
+            lane.ext_offset += 4
         elif op == "LOAD_REG_EXT":
-            ext_word = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset, 0)
+            ext_word = self.proc.code.get(lane.instr_pc + lane.ext_offset, 0)
             reg_num = (ext_word >> 16) & 0x7
             if micro_op.args[0] == "SRC":
-                self.proc.dp.src_reg = reg_num
+                lane.src_reg = reg_num
             else:
-                self.proc.dp.dst_reg = reg_num
-            self.proc.dp.ext_offset += 4
+                lane.dst_reg = reg_num
+            lane.ext_offset += 4
         elif op == "FETCH_SRC_ADDR":
-            self.proc.dp.mem_addr = self.proc.dp.get_reg(self.proc.dp.src_reg)
+            lane.mem_addr = self.proc.dp.get_reg(lane.src_reg)
         elif op == "FETCH_DST_ADDR":
-            self.proc.dp.mem_addr = self.proc.dp.get_reg(self.proc.dp.dst_reg)
+            lane.mem_addr = self.proc.dp.get_reg(lane.dst_reg)
         elif op == "FETCH_DISPLACEMENT_ADDR":
-            ext_word = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset - 4, 0)
-            displacement = ext_word & 0xFFFF
-            if displacement & 0x8000:  # If handling negative displacement
-                displacement -= 0x10000
-            base_reg_val = self.proc.dp.get_reg(self.proc.dp.src_reg)
-            self.proc.dp.mem_addr = base_reg_val + displacement
-        elif op == "FETCH_DISPLACEMENT_ADDR_DST":
-            # for displacement mode in dst
-            ext_word = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset - 4, 0)
+            ext_word = self.proc.code.get(lane.instr_pc + lane.ext_offset - 4, 0)
             displacement = ext_word & 0xFFFF
             if displacement & 0x8000:
                 displacement -= 0x10000
-            base_reg_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
-            self.proc.dp.mem_addr = base_reg_val + displacement
+            base_reg_val = self.proc.dp.get_reg(lane.src_reg)
+            lane.mem_addr = base_reg_val + displacement
+        elif op == "FETCH_DISPLACEMENT_ADDR_DST":
+            ext_word = self.proc.code.get(lane.instr_pc + lane.ext_offset - 4, 0)
+            displacement = ext_word & 0xFFFF
+            if displacement & 0x8000:
+                displacement -= 0x10000
+            base_reg_val = self.proc.dp.get_reg(lane.dst_reg)
+            lane.mem_addr = base_reg_val + displacement
         elif op == "POSTINC_SRC":
-            reg = self.proc.dp.src_reg
+            reg = lane.src_reg
             self.proc.dp.set_reg(reg, self.proc.dp.get_reg(reg) + 4)
         elif op == "POSTINC_DST":
-            reg = self.proc.dp.dst_reg
+            reg = lane.dst_reg
             self.proc.dp.set_reg(reg, self.proc.dp.get_reg(reg) + 4)
         elif op == "PREDEC_DST":
-            reg = self.proc.dp.dst_reg
+            reg = lane.dst_reg
             self.proc.dp.set_reg(reg, self.proc.dp.get_reg(reg) - 4)
         elif op == "READ_MEM":
-            self.proc.dp.mem_data = self.proc.read_data_word(self.proc.dp.mem_addr)
+            lane.mem_data = self.proc.read_data_word(lane.mem_addr)
         elif op == "WRITE_MEM":
-            if micro_op.args[0] == "SRC_REG":
-                val = self.proc.dp.get_reg(self.proc.dp.src_reg)
-            else:
-                val = 0
-            self.proc.write_data_word(self.proc.dp.mem_addr, val)
+            val = self.proc.dp.get_reg(lane.src_reg) if micro_op.args[0] == "SRC_REG" else 0
+            self.proc.write_data_word(lane.mem_addr, val)
         elif op == "EXEC":
             cmd = micro_op.args[0]
             if cmd == "MOV":
                 src = micro_op.args[1]
                 dst = micro_op.args[2]
                 if src == "SRC_REG":
-                    val = self.proc.dp.get_reg(self.proc.dp.src_reg)
+                    val = self.proc.dp.get_reg(lane.src_reg)
                 elif src == "IMM":
-                    val = self.proc.dp.imm
+                    val = lane.imm
                 elif src == "MEM":
-                    val = self.proc.dp.mem_data
+                    val = lane.mem_data
                 else:
                     val = 0
+
                 if dst == "DST_REG":
-                    self.proc.dp.set_reg(self.proc.dp.dst_reg, val)
-                self.proc.dp.update_flags(val, size=("b" if self.proc.dp.size == 1 else "l"))
+                    self.proc.dp.set_reg(lane.dst_reg, val)
+                self.proc.dp.update_flags(val, size=("b" if lane.size == 1 else "l"))
+
             elif cmd in ("ADD", "SUB", "CMP", "AND", "OR", "XOR", "MUL", "DIV"):
                 src_type = micro_op.args[1]
                 if src_type == "IMM":
-                    operand = self.proc.dp.imm
+                    operand = lane.imm
                 elif src_type == "SRC_REG":
-                    operand = self.proc.dp.get_reg(self.proc.dp.src_reg)
+                    operand = self.proc.dp.get_reg(lane.src_reg)
                 else:
                     operand = 0
 
-                dst_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
+                dst_val = self.proc.dp.get_reg(lane.dst_reg)
                 is_sub = False
 
                 if cmd == "ADD":
@@ -493,24 +619,18 @@ class ControlUnit:
                 elif cmd == "MUL":
                     result = dst_val * operand
                 elif cmd == "DIV":
-                    if operand == 0:
-                        result = 0
-                    else:
-                        result = dst_val // operand
+                    result = 0 if operand == 0 else dst_val // operand
                 else:
                     raise NotImplementedError(f"Unsupported command: {cmd}")
 
-                self.proc.dp.update_flags(result, size=("b" if self.proc.dp.size == 1 else "l"), a=dst_val, b=operand, is_sub=is_sub)
+                self.proc.dp.update_flags(result, size=("b" if lane.size == 1 else "l"), a=dst_val, b=operand, is_sub=is_sub)
                 if cmd != "CMP":
-                    self.proc.dp.set_reg(self.proc.dp.dst_reg, result)
+                    self.proc.dp.set_reg(lane.dst_reg, result)
 
             elif cmd in ("CLR", "NOT", "NEG", "ASL", "ASR", "LSL", "LSR"):
-                dst_val = self.proc.dp.get_reg(self.proc.dp.dst_reg)
-                # Define shift amount
-                if len(micro_op.args) >= 2 and micro_op.args[1] == "IMM":
-                    shift_amount = self.proc.dp.imm
-                else:
-                    shift_amount = 1
+                dst_val = self.proc.dp.get_reg(lane.dst_reg)
+                shift_amount = lane.imm if len(micro_op.args) >= 2 and micro_op.args[1] == "IMM" else 1
+                result = 0
 
                 if cmd == "CLR":
                     result = 0
@@ -527,23 +647,19 @@ class ControlUnit:
                         result = dst_val >> shift_amount
                 elif cmd == "LSR":
                     result = (dst_val & 0xFFFFFFFF) >> shift_amount
-                else:
-                    raise NotImplementedError(f"Unsupported shift/clear command: {cmd}")
 
-                self.proc.dp.update_flags(result, size=("b" if self.proc.dp.size == 1 else "l"))
-                self.proc.dp.set_reg(self.proc.dp.dst_reg, result)
+                self.proc.dp.update_flags(result, size=("b" if lane.size == 1 else "l"))
+                self.proc.dp.set_reg(lane.dst_reg, result)
 
-                self.proc.dp.update_flags(result, size=("b" if self.proc.dp.size == 1 else "l"))
-                self.proc.dp.set_reg(self.proc.dp.dst_reg, result)
         elif op == "SET_PC":
             if micro_op.args[0] == "IMM":
-                self.proc.dp.pc = self.proc.dp.imm
+                self.proc.dp.pc = lane.imm
                 self.proc.dp.pc_modified = True
         elif op == "PUSH_PC":
             sp = self.proc.dp.get_reg(7)
             sp -= 4
             self.proc.dp.set_reg(7, sp)
-            ret_addr = self.proc.dp.pc + self.instr_size
+            ret_addr = lane.instr_pc + lane.instr_size
             self.proc.write_data_word(sp, ret_addr)
         elif op == "POP_PC":
             sp = self.proc.dp.get_reg(7)
@@ -553,19 +669,21 @@ class ControlUnit:
             self.proc.dp.pc = ret_addr
             self.proc.dp.pc_modified = True
         elif op == "BRANCH_IF":
-            take = self._eval_condition(self.proc.dp.branch_cond)
+            take = self._eval_condition(lane.branch_cond)
             if take:
-                self.proc.dp.pc = self.proc.dp.imm
+                self.proc.dp.pc = lane.imm
                 self.proc.dp.pc_modified = True
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python machine.py <binary_file> [input_file]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Half68k Processor Model")
+    parser.add_argument("binary_file", help="Path to the binary file")
+    parser.add_argument("input_file", nargs="?", help="Optional input file")
+    parser.add_argument("--no-superscalar", action="store_true", help="Disable superscalar execution mode")
+    args = parser.parse_args()
 
-    bin_path = Path(sys.argv[1])
-    input_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+    bin_path = Path(args.binary_file)
+    input_path = Path(args.input_file) if args.input_file else None
 
     with bin_path.open("rb") as f:
         data_count = struct.unpack("<I", f.read(4))[0]
@@ -585,7 +703,10 @@ def main() -> None:
         with input_path.open("rb") as f:
             input_data = f.read()
 
-    proc = Processor(code, data, code_start, input_data)
+    # Superscalar is enabled by default, disable by --no-superscalar flag
+    is_superscalar = not args.no_superscalar
+
+    proc = Processor(code, data, code_start, input_data, superscalar=is_superscalar)
     proc.run()
 
 
