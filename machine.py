@@ -169,9 +169,11 @@ class Processor:
     def run(self) -> None:
         while not self.halted:
             self.tick()
+        output_text = self.output_buffer.decode("ascii", errors="ignore")
         self.log_lines.append(f"Total Ticks: {self.clock}")
         self.log_lines.append(f"Instructions Executed: {self.instr_count}")
-        print("Output:\n", self.output_buffer.decode("ascii", errors="ignore"), sep="")
+        self.log_lines.append(f"Output: {output_text}")
+        print("Output:\n", output_text, sep="")
         journal_path = Path("journal.log")
         with journal_path.open("w") as f:
             f.write("\n".join(self.log_lines) + "\n")
