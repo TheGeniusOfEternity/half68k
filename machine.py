@@ -99,6 +99,8 @@ class Processor:
         self.dp.pc = code_start
         self.cu = ControlUnit(self)
         self.clock = 0
+        self.instr_count = 0
+        self.current_mnemonic = ""
         self.halted = False
         self.log_lines: list[str] = []
 
@@ -132,19 +134,15 @@ class Processor:
     def run(self) -> None:
         while not self.halted:
             self.tick()
+        self.log_lines.append(f"Total Ticks: {self.clock}")
+        self.log_lines.append(f"Instructions Executed: {self.instr_count}")
         print("Output:\n", self.output_buffer.decode("ascii", errors="ignore"), sep="")
         journal_path = Path("journal.log")
         with journal_path.open("w") as f:
             f.write("\n".join(self.log_lines) + "\n")
 
     def _log(self) -> None:
-        exec_str = ", ".join(str(op) for op in self.cu.current_micro_ops) if self.cu.current_micro_ops else "NOP"
-        self.log_lines.append(
-            f"Tick: {self.clock:04d} | PC: {self.dp.pc:04X} | "
-            f"R0={self.dp.regs[0]:08X} R1={self.dp.regs[1]:08X} R2={self.dp.regs[2]:08X} R3={self.dp.regs[3]:08X} "
-            f"R4={self.dp.regs[4]:08X} R5={self.dp.regs[5]:08X} R6={self.dp.regs[6]:08X} SP={self.dp.regs[7]:08X} "
-            f"| Exec: {exec_str}"
-        )
+        self.log_lines.append(f"Tick: {self.clock:04d} | PC: {self.dp.pc:04X} | " f"SP: {self.dp.regs[7]:08X} | Exec: {self.current_mnemonic}")
 
 
 class ControlUnit:
@@ -235,6 +233,7 @@ class ControlUnit:
             self.current_microprogram = None
             return
         if self.current_microprogram is None:
+            self.proc.instr_count += 1
             self._start_next_instruction()
             return
         micro_step = self.fetch_micro_instr()
@@ -276,7 +275,14 @@ class ControlUnit:
         self.instr_size = calc_instr_size_from_modes(opcode, src_mode, dst_mode)
 
         mnemonic = REVERSED_OPCODES.get(opcode)
+        self.proc.current_mnemonic = mnemonic if mnemonic else "???"
+
         if mnemonic is not None:
+            if mnemonic == "die":
+                self.proc.halted = True
+                self.instr_done = True
+                self.current_mnemonic = "die"
+                return
             if mnemonic == "mv":
                 src_type = (src_mode >> 3) & 0x3
                 dst_type = (dst_mode >> 3) & 0x3
@@ -394,6 +400,7 @@ class ControlUnit:
         op = micro_op.op
         if op == "HALT":
             self.proc.halted = True
+            self.instr_done = True
         elif op == "LOAD_IMM_EXT":
             self.proc.dp.imm = self.proc.code.get(self.proc.dp.pc + self.proc.dp.ext_offset, 0)
             self.proc.dp.ext_offset += 4
