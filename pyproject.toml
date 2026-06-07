@@ -53,3 +53,7 @@ exclude = [
     "build",
     "dist",
 ]
+
+[[tool.mypy.overrides]]
+module = "tools.test_golden"
+disable_error_code = ["misc"]
