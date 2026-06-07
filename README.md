@@ -416,6 +416,26 @@ out_log: |
 ```
 Тест автоматически транслирует исходный код, запускает модель в суперскалярном режиме и сравнивает полученные логи с эталонами. Для больших журналов (например, prob1) допускается частичное сравнение: в `out_log` вставляется разделитель ..., который отделяет начальный и конечный фрагменты; остальная часть не проверяется.
 
+Ручная трансляция и запуск (на примере алгоритма `hello_user_name`):
+```
+> python translator.py examples/hello_user_name.s hello_user_name.bin 
+Translation complete: hello_user_name.bin, hello_user_name.log (Flags: ['IN_PORT', 'OUT_PORT'])
+  
+> python machine.py hello_user_name.bin input.txt
+Tick: 0001 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+Tick: 0002 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+Tick: 0003 | PC: 1008 | SP: 0003FFFC | Exec: jsr (L0)
+Tick: 0004 | PC: 1008 | SP: 0003FFF8 | Exec: jsr (L0)
+Tick: 0005 | PC: 10DC | SP: 0003FFF8 | Exec: jsr (L0)
+Tick: 0006 | PC: 10DC | SP: 0003FFF8 | Exec: mv (L0)
+Tick: 0007 | PC: 10DC | SP: 0003FFF8 | Exec: mv (L0)
+...
+Total Ticks: 688
+Instructions Executed: 372
+Output: What is your name?
+Hello, Maksim Safin!
+```
+
 ### CI
 Настроен GitHub Actions (`.github/workflows/ci.yml`). При каждом пуше и PR выполняются:
 - линтинг (`ruff`),
