@@ -28,5 +28,8 @@ jobs:
       - name: Run Unit tests (translator)
         run: pytest tools/test_translator.py
 
+      - name: Run Unit tests (processor)
+        run: pytest tools/test_machine.py
+
       - name: Run Golden tests
         run: pytest tools/test_golden.py
