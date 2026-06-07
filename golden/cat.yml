@@ -1,0 +1,119 @@
+in_source: |-
+  %define IN_PORT  0xFFFFFF00
+  %define OUT_PORT 0xFFFFFF04
+
+  .code
+  .org 0x1000
+  loop:
+      mv.b    (IN_PORT), R0   ; move data by input address to R0 register
+      cmp.b   #0, R0          ; compare R0 with 0
+      beq     done            ; if R0 is 0 then goto done
+      mv.b    R0, (OUT_PORT)  ; move data from R0 by output address
+      jmp     loop            ; goto loop
+  done:
+      die
+in_text: "Love CSA"
+out_code_log: |-
+  CODE 00001000 - 07B40000 - mv
+  CODE 00001001 - FFFFFF00 - 
+  CODE 00001008 - 12040000 - cmp
+  CODE 00001009 - 00000000 - 
+  CODE 00001010 - 5C000000 - beq
+  CODE 00001011 - 00001028 - 
+  CODE 00001018 - 068D8000 - mv
+  CODE 00001019 - FFFFFF04 - 
+  CODE 00001020 - 44000000 - jmp
+  CODE 00001021 - 00001000 - 
+  CODE 00001028 - 50000000 - die
+out_log: |-
+  Tick: 0001 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0002 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0003 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0004 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0005 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0006 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0007 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0008 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0009 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0010 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0011 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0012 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0013 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0014 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0015 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0016 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0017 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0018 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0019 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0020 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0021 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0022 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0023 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0024 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0025 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0026 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0027 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0028 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0029 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0030 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0031 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0032 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0033 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0034 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0035 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0036 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0037 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0038 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0039 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0040 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0041 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0042 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0043 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0044 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0045 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0046 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0047 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0048 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0049 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0050 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0051 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0052 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0053 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0054 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0055 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0056 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0057 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0058 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0059 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0060 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0061 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0062 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0063 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0064 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0065 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0066 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0067 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0068 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0069 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0070 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0071 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0072 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0073 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0074 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0075 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0076 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0077 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0078 | PC: 1018 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0079 | PC: 1020 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0080 | PC: 1000 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0081 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0082 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0083 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0084 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0085 | PC: 1008 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0086 | PC: 1010 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0087 | PC: 1028 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0088 | PC: 1028 | SP: 0003FFFC | Exec: die (L0)
+  Total Ticks: 88
+  Instructions Executed: 44
+  Output: Love CSA

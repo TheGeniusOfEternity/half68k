@@ -25,15 +25,8 @@ jobs:
       - name: Run Mypy (type checking)
         run: mypy .
 
-      - name: Run Unit Tests
-        run: pytest tests/test_translator.py
+      - name: Run Unit tests (translator)
+        run: pytest tools/test_translator.py
 
-      - name: Run Golden Tests
-        run: |
-          find tests -name '*.s' | while IFS= read -r s_file; do
-            echo "Compiling $s_file"
-            python translator.py "$s_file" "${s_file%.s}.bin"
-            if [ -f "$(dirname "$s_file")/golden.log" ]; then
-               diff "${s_file%.s}.log" "$(dirname "$s_file")/golden.log" || exit 1
-            fi
-          done
+      - name: Run Golden tests
+        run: pytest tools/test_golden.py
