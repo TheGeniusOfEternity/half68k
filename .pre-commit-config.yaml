@@ -11,3 +11,4 @@ repos:
     hooks:
       - id: mypy
         args: [--strict, --ignore-missing-imports, --explicit-package-bases]
+        additional_dependencies: [types-PyYAML]
