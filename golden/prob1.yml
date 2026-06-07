@@ -1,0 +1,1071 @@
+in_source: |-
+  ; Euler 4 Problem
+  %define IN_PORT  0xFFFFFF00
+  %define OUT_PORT 0xFFFFFF04
+
+  .data
+  max_pal: dw 0
+  prod:    dw 0
+  dec_buf: dw 0,0,0,0,0,0,0,0,0,0
+
+  .code
+  .org 0x1000
+
+  start:
+      mv.l    #0, R2            ; R2 = max_pal = 0
+      mv.l    #999, R0          ; R0 = i = 999
+
+  loop_i:
+      cmp.l   #99, R0
+      ble     print_res
+
+      ; optimization - if i * i <= max_pal then there won't be big palindromes
+      mv.l    R0, R3
+      mul.l   R0, R3            ; R3 = i * i
+      cmp.l   R2, R3            ; compare R2 (max_pal) and R3 (i*i)
+      ble     print_res         ; exit
+
+      mv.l    R0, R1            ; R1 = j = i (skip duplicates)
+
+  loop_j:
+      cmp.l   #99, R1
+      ble     next_i            ; if j <= 99 then goto next i
+
+      mv.l    R0, R3
+      mul.l   R1, R3            ; R3 = prod = i * j
+
+      ; if prod <= max_pal the stop j decreasing
+      cmp.l   R2, R3
+      ble     next_i
+
+      ; potential maximumn
+      mv.l    #prod, R4
+      mv.l    R3, (R4)
+
+      ; pheck if palindrome
+      jsr     check_pal
+      cmp.l   #0, R6
+      beq     next_j
+
+      mv.l    R3, R2            ; update max_pal
+
+  next_j:
+      sub.l   #1, R1            ; j--
+      jmp     loop_j
+
+  next_i:
+      sub.l   #1, R0            ; i--
+      jmp     loop_i
+
+  print_res:
+      mv.l    #max_pal, R4
+      mv.l    R2, (R4)          ; save final result
+
+      mv.l    R2, R0            ; print max_pal
+      jsr     print_dec         ; call decimal num print
+      die
+
+  ; print decimal num procedure
+  print_dec:
+      mv.l    #dec_buf, R4      ; buffer start pointer
+      mv.l    #0, R5            ; digits counter
+
+  pd_loop:
+      ; find num % 10
+      mv.l    R0, R6
+      div.l   #10, R0
+      mv.l    R0, R3
+      mul.l   #10, R3
+      sub.l   R3, R6
+      add.l   #48, R6
+
+      mv.l    R6, (R4)
+      add.l   #4, R4
+      add.l   #1, R5
+
+      cmp.l   #0, R0            ; if num is not 0 continue
+      bne     pd_loop
+
+  pd_print:
+      ; print digits in reverse order
+      sub.l   #4, R4
+      mv.l    (R4), R6
+      mv.b    R6, (OUT_PORT)
+      sub.l   #1, R5
+      cmp.l   #0, R5
+      bne     pd_print
+
+      rts
+
+  ; check palindrome procedure
+  check_pal:
+      mv.l    #prod, R4
+      mv.l    (R4), R3          ; R3 = temp = prod
+      mv.l    #0, R5            ; R5 = rev = 0
+
+  pal_loop:
+      cmp.l   #0, R3
+      beq     pal_end
+
+      ; rem = temp % 10
+      mv.l    R3, R6
+      div.l   #10, R3
+      mv.l    R3, R4
+      mul.l   #10, R4
+      sub.l   R4, R6
+
+      ; create reversed num - rev = rev * 10 + rem
+      mul.l   #10, R5
+      add.l   R6, R5
+
+      jmp     pal_loop
+
+  pal_end:
+      mv.l    #prod, R4
+      mv.l    (R4), R3
+      cmp.l   R5, R3
+      beq     is_pal
+      mv.l    #0, R6
+      rts
+  is_pal:
+      mv.l    #1, R6
+      rts
+in_text: ""
+out_code_log: |-
+  DATA 00000000 - 00000000
+  DATA 00000004 - 00000000
+  DATA 00000008 - 00000000
+  DATA 00000009 - 00000000
+  DATA 0000000A - 00000000
+  DATA 0000000B - 00000000
+  DATA 0000000C - 00000000
+  DATA 0000000D - 00000000
+  DATA 0000000E - 00000000
+  DATA 0000000F - 00000000
+  DATA 00000010 - 00000000
+  DATA 00000011 - 00000000
+  CODE 00001000 - 04050000 - mv
+  CODE 00001001 - 00000000 - 
+  CODE 00001008 - 04040000 - mv
+  CODE 00001009 - 000003E7 - 
+  CODE 00001010 - 10040000 - cmp
+  CODE 00001011 - 00000063 - 
+  CODE 00001018 - 78000000 - ble
+  CODE 00001019 - 000010A4 - 
+  CODE 00001020 - 04858000 - mv
+  CODE 00001024 - 14858000 - mul
+  CODE 00001028 - 10A58000 - cmp
+  CODE 0000102C - 78000000 - ble
+  CODE 0000102D - 000010A4 - 
+  CODE 00001034 - 04848000 - mv
+  CODE 00001038 - 10048000 - cmp
+  CODE 00001039 - 00000063 - 
+  CODE 00001040 - 78000000 - ble
+  CODE 00001041 - 00001094 - 
+  CODE 00001048 - 04858000 - mv
+  CODE 0000104C - 14958000 - mul
+  CODE 00001050 - 10A58000 - cmp
+  CODE 00001054 - 78000000 - ble
+  CODE 00001055 - 00001094 - 
+  CODE 0000105C - 04060000 - mv
+  CODE 0000105D - 00000004 - 
+  CODE 00001064 - 04BA0000 - mv
+  CODE 00001068 - 48000000 - jsr
+  CODE 00001069 - 00001148 - 
+  CODE 00001070 - 10070000 - cmp
+  CODE 00001071 - 00000000 - 
+  CODE 00001078 - 5C000000 - beq
+  CODE 00001079 - 00001084 - 
+  CODE 00001080 - 04B50000 - mv
+  CODE 00001084 - 0C048000 - sub
+  CODE 00001085 - 00000001 - 
+  CODE 0000108C - 44000000 - jmp
+  CODE 0000108D - 00001038 - 
+  CODE 00001094 - 0C040000 - sub
+  CODE 00001095 - 00000001 - 
+  CODE 0000109C - 44000000 - jmp
+  CODE 0000109D - 00001010 - 
+  CODE 000010A4 - 04060000 - mv
+  CODE 000010A5 - 00000000 - 
+  CODE 000010AC - 04AA0000 - mv
+  CODE 000010B0 - 04A40000 - mv
+  CODE 000010B4 - 48000000 - jsr
+  CODE 000010B5 - 000010C0 - 
+  CODE 000010BC - 50000000 - die
+  CODE 000010C0 - 04060000 - mv
+  CODE 000010C1 - 00000008 - 
+  CODE 000010C8 - 04068000 - mv
+  CODE 000010C9 - 00000000 - 
+  CODE 000010D0 - 04870000 - mv
+  CODE 000010D4 - 18040000 - div
+  CODE 000010D5 - 0000000A - 
+  CODE 000010DC - 04858000 - mv
+  CODE 000010E0 - 14058000 - mul
+  CODE 000010E1 - 0000000A - 
+  CODE 000010E8 - 0CB70000 - sub
+  CODE 000010EC - 08070000 - add
+  CODE 000010ED - 00000030 - 
+  CODE 000010F4 - 04EA0000 - mv
+  CODE 000010F8 - 08060000 - add
+  CODE 000010F9 - 00000004 - 
+  CODE 00001100 - 08068000 - add
+  CODE 00001101 - 00000001 - 
+  CODE 00001108 - 10040000 - cmp
+  CODE 00001109 - 00000000 - 
+  CODE 00001110 - 60000000 - bne
+  CODE 00001111 - 000010D0 - 
+  CODE 00001118 - 0C060000 - sub
+  CODE 00001119 - 00000004 - 
+  CODE 00001120 - 05470000 - mv
+  CODE 00001124 - 06ED8000 - mv
+  CODE 00001125 - FFFFFF04 - 
+  CODE 0000112C - 0C068000 - sub
+  CODE 0000112D - 00000001 - 
+  CODE 00001134 - 10068000 - cmp
+  CODE 00001135 - 00000000 - 
+  CODE 0000113C - 60000000 - bne
+  CODE 0000113D - 00001118 - 
+  CODE 00001144 - 4C000000 - rts
+  CODE 00001148 - 04060000 - mv
+  CODE 00001149 - 00000004 - 
+  CODE 00001150 - 05458000 - mv
+  CODE 00001154 - 04068000 - mv
+  CODE 00001155 - 00000000 - 
+  CODE 0000115C - 10058000 - cmp
+  CODE 0000115D - 00000000 - 
+  CODE 00001164 - 5C000000 - beq
+  CODE 00001165 - 0000119C - 
+  CODE 0000116C - 04B70000 - mv
+  CODE 00001170 - 18058000 - div
+  CODE 00001171 - 0000000A - 
+  CODE 00001178 - 04B60000 - mv
+  CODE 0000117C - 14060000 - mul
+  CODE 0000117D - 0000000A - 
+  CODE 00001184 - 0CC70000 - sub
+  CODE 00001188 - 14068000 - mul
+  CODE 00001189 - 0000000A - 
+  CODE 00001190 - 08E68000 - add
+  CODE 00001194 - 44000000 - jmp
+  CODE 00001195 - 0000115C - 
+  CODE 0000119C - 04060000 - mv
+  CODE 0000119D - 00000004 - 
+  CODE 000011A4 - 05458000 - mv
+  CODE 000011A8 - 10D58000 - cmp
+  CODE 000011AC - 5C000000 - beq
+  CODE 000011AD - 000011C0 - 
+  CODE 000011B4 - 04070000 - mv
+  CODE 000011B5 - 00000000 - 
+  CODE 000011BC - 4C000000 - rts
+  CODE 000011C0 - 04070000 - mv
+  CODE 000011C1 - 00000001 - 
+  CODE 000011C8 - 4C000000 - rts
+out_log: |-
+  Tick: 0001 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0), mv (L1)
+  Tick: 0002 | PC: 1000 | SP: 0003FFFC | Exec: mv (L0), mv (L1)
+  Tick: 0003 | PC: 1010 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0004 | PC: 1010 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0005 | PC: 1018 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0006 | PC: 1020 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0007 | PC: 1024 | SP: 0003FFFC | Exec: mul (L0)
+  Tick: 0008 | PC: 1028 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0009 | PC: 102C | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0010 | PC: 1034 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0011 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0012 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0013 | PC: 1040 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0014 | PC: 1048 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0015 | PC: 104C | SP: 0003FFFC | Exec: mul (L0)
+  Tick: 0016 | PC: 1050 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0017 | PC: 1054 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0018 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0019 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0020 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0021 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0022 | PC: 1068 | SP: 0003FFFC | Exec: jsr (L0)
+  Tick: 0023 | PC: 1068 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0024 | PC: 1148 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0025 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0026 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0027 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0028 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0029 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0030 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0031 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0032 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0033 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0034 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0035 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0036 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0037 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0038 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0039 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0040 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0041 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0042 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0043 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0044 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0045 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0046 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0047 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0048 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0049 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0050 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0051 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0052 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0053 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0054 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0055 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0056 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0057 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0058 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0059 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0060 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0061 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0062 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0063 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0064 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0065 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0066 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0067 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0068 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0069 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0070 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0071 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0072 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0073 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0074 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0075 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0076 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0077 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0078 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0079 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0080 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0081 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0082 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0083 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0084 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0085 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0086 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0087 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0088 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0089 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0090 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0091 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0092 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0093 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0094 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0095 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0096 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0097 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0098 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0099 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0100 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0101 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0102 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0103 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0104 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0105 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0106 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0107 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0108 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0109 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0110 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0111 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0112 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0113 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0114 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0115 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0116 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0117 | PC: 119C | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0118 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0119 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0120 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0121 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0122 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0123 | PC: 11A8 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0124 | PC: 11AC | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0125 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0126 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0127 | PC: 1070 | SP: 0003FFFC | Exec: rts (L0)
+  Tick: 0128 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0129 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0130 | PC: 1078 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0131 | PC: 1084 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0132 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0133 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0134 | PC: 108C | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0135 | PC: 1038 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0136 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0137 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0138 | PC: 1040 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0139 | PC: 1048 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0140 | PC: 104C | SP: 0003FFFC | Exec: mul (L0)
+  Tick: 0141 | PC: 1050 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0142 | PC: 1054 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0143 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0144 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0145 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0146 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0147 | PC: 1068 | SP: 0003FFFC | Exec: jsr (L0)
+  Tick: 0148 | PC: 1068 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0149 | PC: 1148 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0150 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0151 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0152 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0153 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0154 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0155 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0156 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0157 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0158 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0159 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0160 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0161 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0162 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0163 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0164 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0165 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0166 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0167 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0168 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0169 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0170 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0171 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0172 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0173 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0174 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0175 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0176 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0177 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0178 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0179 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0180 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0181 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0182 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0183 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0184 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0185 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0186 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0187 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0188 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0189 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0190 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0191 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0192 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0193 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0194 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0195 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0196 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0197 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0198 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0199 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0200 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0201 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0202 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0203 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0204 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0205 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0206 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0207 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0208 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0209 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0210 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0211 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0212 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0213 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0214 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0215 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0216 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0217 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0218 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0219 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0220 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0221 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0222 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0223 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0224 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0225 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0226 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0227 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0228 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0229 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0230 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0231 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0232 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0233 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0234 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0235 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0236 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0237 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0238 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0239 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0240 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0241 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0242 | PC: 119C | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0243 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0244 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0245 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0246 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0247 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0248 | PC: 11A8 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0249 | PC: 11AC | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0250 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0251 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0252 | PC: 1070 | SP: 0003FFFC | Exec: rts (L0)
+  Tick: 0253 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0254 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0255 | PC: 1078 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0256 | PC: 1084 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0257 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0258 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0259 | PC: 108C | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0260 | PC: 1038 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0261 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0262 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0263 | PC: 1040 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0264 | PC: 1048 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0265 | PC: 104C | SP: 0003FFFC | Exec: mul (L0)
+  Tick: 0266 | PC: 1050 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0267 | PC: 1054 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0268 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0269 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0270 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0271 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0272 | PC: 1068 | SP: 0003FFFC | Exec: jsr (L0)
+  Tick: 0273 | PC: 1068 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0274 | PC: 1148 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0275 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0276 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0277 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0278 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0279 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0280 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0281 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0282 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0283 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0284 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0285 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0286 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0287 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0288 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0289 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0290 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0291 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0292 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0293 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0294 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0295 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0296 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0297 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0298 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0299 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0300 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0301 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0302 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0303 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0304 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0305 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0306 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0307 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0308 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0309 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0310 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0311 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0312 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0313 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0314 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0315 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0316 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0317 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0318 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0319 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0320 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0321 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0322 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0323 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0324 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0325 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0326 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0327 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0328 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0329 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0330 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0331 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0332 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0333 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0334 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0335 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0336 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0337 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0338 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0339 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0340 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0341 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0342 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0343 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0344 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0345 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0346 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0347 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0348 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0349 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0350 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0351 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0352 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0353 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0354 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0355 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0356 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0357 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0358 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0359 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0360 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0361 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0362 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0363 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0364 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0365 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0366 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0367 | PC: 119C | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0368 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0369 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0370 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0371 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0372 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0373 | PC: 11A8 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0374 | PC: 11AC | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0375 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0376 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0377 | PC: 1070 | SP: 0003FFFC | Exec: rts (L0)
+  Tick: 0378 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0379 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0380 | PC: 1078 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0381 | PC: 1084 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0382 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0383 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0384 | PC: 108C | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0385 | PC: 1038 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0386 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0387 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0388 | PC: 1040 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0389 | PC: 1048 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0390 | PC: 104C | SP: 0003FFFC | Exec: mul (L0)
+  Tick: 0391 | PC: 1050 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0392 | PC: 1054 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0393 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0394 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0395 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0396 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0397 | PC: 1068 | SP: 0003FFFC | Exec: jsr (L0)
+  Tick: 0398 | PC: 1068 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0399 | PC: 1148 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0400 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0401 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0402 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0403 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0404 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0405 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0406 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0407 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0408 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0409 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0410 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0411 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0412 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0413 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0414 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0415 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0416 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0417 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0418 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0419 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0420 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0421 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0422 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0423 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0424 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0425 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0426 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0427 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0428 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0429 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0430 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0431 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0432 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0433 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0434 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0435 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0436 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0437 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0438 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0439 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0440 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0441 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0442 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0443 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0444 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0445 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0446 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0447 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0448 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0449 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0450 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0451 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0452 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0453 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0454 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0455 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0456 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0457 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0458 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0459 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0460 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0461 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0462 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0463 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0464 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0465 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0466 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0467 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0468 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0469 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0470 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0471 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0472 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0473 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0474 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0475 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0476 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0477 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0478 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0479 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0480 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0481 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0482 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0483 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0484 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0485 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0486 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0487 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0488 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0489 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0490 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0491 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0492 | PC: 119C | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0493 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0494 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0495 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0496 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0497 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0498 | PC: 11A8 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0499 | PC: 11AC | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0500 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0501 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0502 | PC: 1070 | SP: 0003FFFC | Exec: rts (L0)
+  Tick: 0503 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0504 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0505 | PC: 1078 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0506 | PC: 1084 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0507 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0508 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0509 | PC: 108C | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0510 | PC: 1038 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0511 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0512 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0513 | PC: 1040 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0514 | PC: 1048 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0515 | PC: 104C | SP: 0003FFFC | Exec: mul (L0)
+  Tick: 0516 | PC: 1050 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0517 | PC: 1054 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0518 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0519 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0520 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0521 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0522 | PC: 1068 | SP: 0003FFFC | Exec: jsr (L0)
+  Tick: 0523 | PC: 1068 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0524 | PC: 1148 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0525 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0526 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0527 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0528 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0529 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0530 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0531 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0532 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0533 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0534 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0535 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0536 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0537 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0538 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0539 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0540 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0541 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0542 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0543 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0544 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0545 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0546 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0547 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0548 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0549 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0550 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0551 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0552 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0553 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0554 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0555 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0556 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0557 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0558 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0559 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0560 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0561 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0562 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0563 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0564 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0565 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0566 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0567 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0568 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0569 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0570 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0571 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0572 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0573 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0574 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0575 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0576 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0577 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0578 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0579 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0580 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0581 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0582 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0583 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0584 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0585 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0586 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0587 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0588 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0589 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0590 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0591 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0592 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0593 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0594 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0595 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0596 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0597 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0598 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0599 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0600 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0601 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0602 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0603 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0604 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0605 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0606 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0607 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0608 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0609 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0610 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0611 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0612 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0613 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0614 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0615 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0616 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0617 | PC: 119C | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0618 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0619 | PC: 119C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0620 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0621 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0622 | PC: 11A4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0623 | PC: 11A8 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0624 | PC: 11AC | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0625 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0626 | PC: 11B4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0627 | PC: 1070 | SP: 0003FFFC | Exec: rts (L0)
+  Tick: 0628 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0629 | PC: 1070 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0630 | PC: 1078 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0631 | PC: 1084 | SP: 0003FFFC | Exec: beq (L0)
+  Tick: 0632 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0633 | PC: 1084 | SP: 0003FFFC | Exec: sub (L0)
+  Tick: 0634 | PC: 108C | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0635 | PC: 1038 | SP: 0003FFFC | Exec: jmp (L0)
+  Tick: 0636 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0637 | PC: 1038 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0638 | PC: 1040 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0639 | PC: 1048 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0640 | PC: 104C | SP: 0003FFFC | Exec: mul (L0)
+  Tick: 0641 | PC: 1050 | SP: 0003FFFC | Exec: cmp (L0)
+  Tick: 0642 | PC: 1054 | SP: 0003FFFC | Exec: ble (L0)
+  Tick: 0643 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0644 | PC: 105C | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0645 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0646 | PC: 1064 | SP: 0003FFFC | Exec: mv (L0)
+  Tick: 0647 | PC: 1068 | SP: 0003FFFC | Exec: jsr (L0)
+  Tick: 0648 | PC: 1068 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0649 | PC: 1148 | SP: 0003FFF8 | Exec: jsr (L0)
+  Tick: 0650 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0651 | PC: 1148 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0652 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0653 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0654 | PC: 1150 | SP: 0003FFF8 | Exec: mv (L0), mv (L1)
+  Tick: 0655 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0656 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0657 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0658 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0659 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0660 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0661 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0662 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0663 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0664 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0665 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0666 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0667 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0668 | PC: 115C | SP: 0003FFF8 | Exec: jmp (L0)
+  Tick: 0669 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0670 | PC: 115C | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 0671 | PC: 1164 | SP: 0003FFF8 | Exec: beq (L0)
+  Tick: 0672 | PC: 116C | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0673 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0674 | PC: 1170 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 0675 | PC: 1178 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 0676 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0677 | PC: 117C | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 0678 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0679 | PC: 1184 | SP: 0003FFF8 | Exec: sub (L0), mul (L1)
+  Tick: 0680 | PC: 1190 | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 0681 | PC: 1194 | SP: 0003FFF8 | Exec: jmp (L0)
+  ...
+  Tick: 766432 | PC: 10F4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766433 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766434 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766435 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766436 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766437 | PC: 1110 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766438 | PC: 10D0 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766439 | PC: 10D0 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766440 | PC: 10D4 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 766441 | PC: 10D4 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 766442 | PC: 10DC | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766443 | PC: 10E0 | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 766444 | PC: 10E0 | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 766445 | PC: 10E8 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766446 | PC: 10EC | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 766447 | PC: 10EC | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 766448 | PC: 10F4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766449 | PC: 10F4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766450 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766451 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766452 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766453 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766454 | PC: 1110 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766455 | PC: 10D0 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766456 | PC: 10D0 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766457 | PC: 10D4 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 766458 | PC: 10D4 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 766459 | PC: 10DC | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766460 | PC: 10E0 | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 766461 | PC: 10E0 | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 766462 | PC: 10E8 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766463 | PC: 10EC | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 766464 | PC: 10EC | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 766465 | PC: 10F4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766466 | PC: 10F4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766467 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766468 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766469 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766470 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766471 | PC: 1110 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766472 | PC: 10D0 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766473 | PC: 10D0 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766474 | PC: 10D4 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 766475 | PC: 10D4 | SP: 0003FFF8 | Exec: div (L0)
+  Tick: 766476 | PC: 10DC | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766477 | PC: 10E0 | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 766478 | PC: 10E0 | SP: 0003FFF8 | Exec: mul (L0)
+  Tick: 766479 | PC: 10E8 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766480 | PC: 10EC | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 766481 | PC: 10EC | SP: 0003FFF8 | Exec: add (L0)
+  Tick: 766482 | PC: 10F4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766483 | PC: 10F4 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766484 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766485 | PC: 10F8 | SP: 0003FFF8 | Exec: add (L0), add (L1)
+  Tick: 766486 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766487 | PC: 1108 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766488 | PC: 1110 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766489 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766490 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766491 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766492 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766493 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766494 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766495 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766496 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766497 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766498 | PC: 113C | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766499 | PC: 1118 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766500 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766501 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766502 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766503 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766504 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766505 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766506 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766507 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766508 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766509 | PC: 113C | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766510 | PC: 1118 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766511 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766512 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766513 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766514 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766515 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766516 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766517 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766518 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766519 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766520 | PC: 113C | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766521 | PC: 1118 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766522 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766523 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766524 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766525 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766526 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766527 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766528 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766529 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766530 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766531 | PC: 113C | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766532 | PC: 1118 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766533 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766534 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766535 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766536 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766537 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766538 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766539 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766540 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766541 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766542 | PC: 113C | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766543 | PC: 1118 | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766544 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766545 | PC: 1118 | SP: 0003FFF8 | Exec: sub (L0)
+  Tick: 766546 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766547 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766548 | PC: 1120 | SP: 0003FFF8 | Exec: mv (L0)
+  Tick: 766549 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766550 | PC: 1124 | SP: 0003FFF8 | Exec: mv (L0), sub (L1)
+  Tick: 766551 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766552 | PC: 1134 | SP: 0003FFF8 | Exec: cmp (L0)
+  Tick: 766553 | PC: 113C | SP: 0003FFF8 | Exec: bne (L0)
+  Tick: 766554 | PC: 10BC | SP: 0003FFFC | Exec: rts (L0)
+  Tick: 766555 | PC: 10BC | SP: 0003FFFC | Exec: die (L0)
+  Total Ticks: 766555
+  Instructions Executed: 515185
+  Output: 906609
