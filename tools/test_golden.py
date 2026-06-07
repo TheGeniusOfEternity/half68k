@@ -1,9 +1,12 @@
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import machine
 import translator
