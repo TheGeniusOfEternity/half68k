@@ -169,14 +169,23 @@ class Processor:
     def run(self) -> None:
         while not self.halted:
             self.tick()
+
+        max_display = 7
+        for line in self.log_lines[:max_display]:
+            print(line)
+        if len(self.log_lines) > max_display:
+            print("...")
         output_text = self.output_buffer.decode("ascii", errors="ignore")
-        self.log_lines.append(f"Total Ticks: {self.clock}")
-        self.log_lines.append(f"Instructions Executed: {self.instr_count}")
-        self.log_lines.append(f"Output: {output_text}")
-        print("Output:\n", output_text, sep="")
+        print(f"Total Ticks: {self.clock}")
+        print(f"Instructions Executed: {self.instr_count}")
+        print(f"Output: {output_text}")
+
         journal_path = Path("journal.log")
         with journal_path.open("w") as f:
             f.write("\n".join(self.log_lines) + "\n")
+            f.write(f"Total Ticks: {self.clock}\n")
+            f.write(f"Instructions Executed: {self.instr_count}\n")
+            f.write(f"Output: {output_text}\n")
 
     def _log(self) -> None:
         exec_str = ", ".join([f"{lane.mnemonic} (L{lane.lane_id})" for lane in self.cu.lanes if lane.active])
