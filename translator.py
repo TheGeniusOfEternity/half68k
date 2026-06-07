@@ -74,13 +74,15 @@ def write_binary(program: Program, bin_path: Path) -> None:
             f.write(struct.pack("<I", word & 0xFFFFFFFF))
 
 
-def main() -> None:
-    if len(sys.argv) < 3:
+def main(cmd_args: None | list[str] = None) -> None:
+    if cmd_args is None:
+        cmd_args = sys.argv[1:]
+    if len(cmd_args) < 2:
         print("Usage: translator.py <input.s> <output.bin> [-DNAME1] [-DNAME2] ...")
         sys.exit(1)
 
-    src_path = Path(sys.argv[1])
-    bin_path = Path(sys.argv[2])
+    src_path = Path(cmd_args[0])
+    bin_path = Path(cmd_args[1])
     log_path = bin_path.with_suffix(".log")
 
     # Collect flags: args that start with -D

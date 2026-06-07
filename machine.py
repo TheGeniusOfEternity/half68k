@@ -677,12 +677,12 @@ class ControlUnit:
                 self.proc.dp.pc_modified = True
 
 
-def main() -> None:
+def main(cmd_args: None | list[str] = None) -> None:
     parser = argparse.ArgumentParser(description="Half68k Processor Model")
     parser.add_argument("binary_file", help="Path to the binary file")
     parser.add_argument("input_file", nargs="?", help="Optional input file")
     parser.add_argument("--no-superscalar", action="store_true", help="Disable superscalar execution mode")
-    args = parser.parse_args()
+    args = parser.parse_args(cmd_args)
 
     bin_path = Path(args.binary_file)
     input_path = Path(args.input_file) if args.input_file else None
