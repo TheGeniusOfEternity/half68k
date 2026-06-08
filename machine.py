@@ -491,6 +491,9 @@ class ControlUnit:
                 lane.branch_cond = cond_map.get(mnemonic, "")
                 take = self._eval_condition(lane.branch_cond)
                 lane.current_microprogram = self.mc.get("branch_taken") if take else self.mc.get("branch_not_taken")
+            elif mnemonic in ("clr", "not", "neg"):
+                lane.dst_reg = dst_mode & 0x7
+                lane.current_microprogram = self.mc.get(f"{mnemonic}_reg")
             elif mnemonic in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div") or mnemonic in ("lsr", "lsl", "asr", "asl"):
                 src_type = (src_mode >> 3) & 0x3
                 if src_type == 0:
