@@ -86,8 +86,8 @@ def main(cmd_args: None | list[str] = None) -> None:
     log_path = bin_path.with_suffix(".log")
 
     # Collect flags: args that start with -D
-    defines = {}
-    for arg in sys.argv[3:]:
+    defines: dict[str, str] = {}
+    for arg in cmd_args[2:]:
         if arg.startswith("-D"):
             flag_name = arg[2:]
             if flag_name:
