@@ -31,19 +31,19 @@ def generate_log(program: Program, log_path: Path) -> None:
             n = len(item.values)
             for i in range(n):
                 word = program.data[data_offset + i]
-                lines.append(f"DATA {addr + i:08X} - {format_hex_word(word)}")
+                lines.append(f"DATA {addr + i * 4:08X} - {format_hex_word(word)}")
             data_offset += n
         elif item.kind == "pstr":
             s = str(item.values[0])  # string
             n = 1 + len(s)
             for i in range(n):
                 word = program.data[data_offset + i]
-                lines.append(f"DATA {addr + i:08X} - {format_hex_word(word)}")
+                lines.append(f"DATA {addr + i * 4:08X} - {format_hex_word(word)}")
             data_offset += n
     # Code
     for instr in program.code:
         for i, word in enumerate(instr.words):
-            lines.append(f"CODE {instr.addr + i:08X} - {format_hex_word(word)} - {instr.mnemonic if i == 0 else ''}")
+            lines.append(f"CODE {instr.addr + i * 4:08X} - {format_hex_word(word)} - {instr.mnemonic if i == 0 else ''}")
     with log_path.open("w") as f:
         if lines:
             f.write("\n".join(lines) + "\n")
