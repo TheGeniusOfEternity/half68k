@@ -37,11 +37,11 @@ loop_j:
     cmp.l   R2, R3
     ble     next_i
 
-    ; potential maximumn
+    ; potential maximum
     mv.l    #prod, R4
     mv.l    R3, (R4)
 
-    ; pheck if palindrome
+    ; check if palindrome
     jsr     check_pal
     cmp.l   #0, R6
     beq     next_j
