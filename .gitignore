@@ -13,3 +13,4 @@ journal.log
 
 bin
 translate.sh
+*.drawio
