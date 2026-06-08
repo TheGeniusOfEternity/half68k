@@ -65,7 +65,7 @@ class DataPath:
         a_masked = a & mask
         b_masked = b & mask
         sign_mask = 0x80 if size == "b" else 0x80000000
-        self.flags.N = bool(result & sign_mask)
+        self.flags.N = bool(res_masked & sign_mask)
         self.flags.Z = res_masked == 0
         if not is_sub:
             self.flags.C = res_masked < a_masked
