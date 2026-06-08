@@ -9,7 +9,18 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from isa import DST_SHIFT, OPCODE_SHIFT, REVERSED_OPCODES, SIZE_SHIFT, SRC_SHIFT, calc_instr_size_from_modes
+from isa import (
+    DST_SHIFT,
+    NO_SIZE_MNEMONICS,
+    OPCODE_SHIFT,
+    REVERSED_OPCODES,
+    SIZE_SHIFT,
+    SPECIAL_ABSOLUTE,
+    SPECIAL_POSTINC,
+    SPECIAL_PREDEC,
+    SRC_SHIFT,
+    calc_instr_size_from_modes,
+)
 
 IN_PORT = 0xFFFFFF00
 OUT_PORT = 0xFFFFFF04
@@ -301,7 +312,7 @@ class ControlUnit:
         return lane.current_microprogram[lane.micro_pc]
 
     @staticmethod
-    def _get_deps(raw: int) -> tuple[set[int], set[int], bool, bool]:
+    def _get_deps(raw: int, pc: int, code: dict[int, int]) -> tuple[set[int], set[int], bool, bool]:
         """Searches for dependencies in instruction before injecting onto the lane"""
         opcode = (raw >> OPCODE_SHIFT) & 0x3F
         src_mode = (raw >> SRC_SHIFT) & 0x1F
@@ -311,56 +322,70 @@ class ControlUnit:
         mem, ctrl = False, False
 
         mnemonic = REVERSED_OPCODES.get(opcode, "")
-        if mnemonic in ("jmp", "jsr", "rts", "die", "beq", "bne", "bcc", "bcs", "bmi", "bpl", "bvs", "bvc", "blt", "ble", "bgt", "bge"):
+
+        # Check control flow
+        if mnemonic in NO_SIZE_MNEMONICS:
             ctrl = True
 
         src_type = (src_mode >> 3) & 0x3
-        src_reg = src_mode & 0x7
         dst_type = (dst_mode >> 3) & 0x3
-        dst_reg = dst_mode & 0x7
 
-        # Check src
-        if src_type == 1:
+        # Compute shift for extension words
+        src_has_ext = src_type in (0, 3)
+        src_ext_addr = pc + 4
+        dst_ext_addr = pc + 4 + (4 if src_has_ext else 0)
+
+        # Analyze SOURCE operand
+        if src_type == 1:  # REGISTER_DIRECT
+            src_reg = src_mode & 0x7
             reads.add(src_reg)
-        elif src_type == 2:
+        elif src_type == 2:  # REGISTER_INDIRECT
+            src_reg = src_mode & 0x7
             reads.add(src_reg)
             mem = True
-        elif src_type == 3:
-            sub = src_mode & 0x7
-            if sub in (0, 1):
+        elif src_type == 3:  # MODE_SPECIAL
+            src_submode = src_mode & 0x7
+            if src_submode != SPECIAL_ABSOLUTE:
+                # Extract base register from extension word
+                ext_word = code.get(src_ext_addr, 0)
+                src_reg = (ext_word >> 16) & 0x7
                 reads.add(src_reg)
-                writes.add(src_reg)
-                mem = True
-            elif sub == 2:
-                reads.add(src_reg)
-                mem = True
-            elif sub == 3:
                 mem = True
 
-        # Check dst
-        if mnemonic in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div"):
-            if dst_type == 1:
+                # POSTINC and PREDEC change base register
+                if src_submode in (SPECIAL_POSTINC, SPECIAL_PREDEC):
+                    writes.add(src_reg)
+            else:
+                mem = True  # Absolute also uses memory
+
+        # Analyze DESTINATION operand
+        if dst_type == 1:  # REGISTER_DIRECT
+            dst_reg = dst_mode & 0x7
+            writes.add(dst_reg)
+            if mnemonic in ("add", "sub", "cmp", "and", "or", "xor", "mul", "div"):
                 reads.add(dst_reg)
-                writes.add(dst_reg)
-        elif mnemonic == "mv":
-            if dst_type == 1:
-                writes.add(dst_reg)
-            elif dst_type == 2:
+        elif dst_type == 2:  # REGISTER_INDIRECT
+            dst_reg = dst_mode & 0x7
+            reads.add(dst_reg)
+            mem = True
+        elif dst_type == 3:  # MODE_SPECIAL
+            dst_submode = dst_mode & 0x7
+            if dst_submode != SPECIAL_ABSOLUTE:
+                # Extract base register from extension word
+                ext_word = code.get(dst_ext_addr, 0)
+                dst_reg = (ext_word >> 16) & 0x7
                 reads.add(dst_reg)
                 mem = True
-            elif dst_type == 3:
-                sub = dst_mode & 0x7
-                if sub in (0, 1):
-                    reads.add(dst_reg)
+
+                # POSTINC and PREDEC change base register
+                if dst_submode in (SPECIAL_POSTINC, SPECIAL_PREDEC):
                     writes.add(dst_reg)
-                    mem = True
-                elif sub == 2:
-                    reads.add(dst_reg)
-                    mem = True
-                elif sub == 3:
-                    mem = True
+            else:
+                mem = True  # Absolute also uses memory
 
+        # Shifts and unary operations
         if mnemonic in ("lsr", "lsl", "asr", "asl", "clr", "not", "neg"):
+            dst_reg = dst_mode & 0x7
             reads.add(dst_reg)
             writes.add(dst_reg)
 
@@ -378,13 +403,13 @@ class ControlUnit:
         self._decode_to_lane(raw1, pc, self.lanes[0])
 
         if self.superscalar:
-            reads1, writes1, mem1, ctrl1 = self._get_deps(raw1)
+            reads1, writes1, mem1, ctrl1 = self._get_deps(raw1, pc, self.proc.code)
             # Control instructions are executed strictly one by one
             if not ctrl1:
                 pc2 = pc + self.lanes[0].instr_size
                 raw2 = self.proc.code.get(pc2, 0)
                 if raw2 != 0:
-                    reads2, writes2, mem2, ctrl2 = self._get_deps(raw2)
+                    reads2, writes2, mem2, ctrl2 = self._get_deps(raw2, pc, self.proc.code)
                     if not ctrl2:
                         # Conflict check (RAW, WAR, WAW, memory structure)
                         conflict = False
