@@ -143,18 +143,27 @@ def build_opcode_word(mnemonic: str, size: str, src_mode: int, dst_mode: int, ex
 
 def calc_instr_size_from_modes(opcode: int, src_mode: int, dst_mode: int) -> int:
     """Computes instruction size in bytes based on opcode and address mode."""
-    mnemonic = REVERSED_OPCODES.get(opcode)
-    if mnemonic in BRANCH_MNEMONICS or mnemonic in ("jmp", "jsr"):
+    mnemonic = REVERSED_OPCODES.get(opcode, "")
+
+    # Control-flow instructions encode as opcode + absolute address (1 extension word)
+    if mnemonic in BRANCH_MNEMONICS:
         return 8
-    size = 4  # opcode
-    # Extensions for src
-    src_type = (src_mode >> 3) & 0x3
-    if src_type == 0:  # imm
-        size += 4
-    elif src_type == 3:  # special
-        sub = src_mode & 0x7
-        if sub in (0, 1, 2, 3):  # postinc, predec, displacement, absolute
+    # Instructions without operands
+    if mnemonic in ("rts", "die"):
+        return 4
+
+    size = 4  # opcode word
+
+    # Unary instructions use only DST operand; SRC field is ignored by encoding.
+    if mnemonic not in ("clr", "neg", "not"):
+        src_type = (src_mode >> 3) & 0x3
+        if src_type == 0:  # imm
             size += 4
+        elif src_type == 3:  # special (postinc/predec/disp/abs)
+            sub = src_mode & 0x7
+            if sub in (0, 1, 2, 3):
+                size += 4
+
     # Extensions for dst
     dst_type = (dst_mode >> 3) & 0x3
     if dst_type == 0:  # imm
@@ -163,4 +172,5 @@ def calc_instr_size_from_modes(opcode: int, src_mode: int, dst_mode: int) -> int
         sub = dst_mode & 0x7
         if sub in (0, 1, 2, 3):
             size += 4
+
     return size
