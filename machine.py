@@ -643,7 +643,12 @@ class ControlUnit:
 
             elif cmd in ("CLR", "NOT", "NEG", "ASL", "ASR", "LSL", "LSR"):
                 dst_val = self.proc.dp.get_reg(lane.dst_reg)
-                shift_amount = lane.imm if len(micro_op.args) >= 2 and micro_op.args[1] == "IMM" else 1
+                if len(micro_op.args) >= 2 and micro_op.args[1] == "IMM":
+                    shift_amount = lane.imm & 0x1F
+                elif len(micro_op.args) >= 2 and micro_op.args[1] == "SRC_REG":
+                    shift_amount = self.proc.dp.get_reg(lane.src_reg) & 0x1F
+                else:
+                    shift_amount = 1
                 result = 0
 
                 if cmd == "CLR":
@@ -655,8 +660,10 @@ class ControlUnit:
                 elif cmd in ("ASL", "LSL"):
                     result = (dst_val << shift_amount) & 0xFFFFFFFF
                 elif cmd == "ASR":
-                    if dst_val & 0x80000000:
-                        result = (dst_val >> shift_amount) | (0xFFFFFFFF << (32 - shift_amount))
+                    if shift_amount == 0:
+                        result = dst_val
+                    elif dst_val & 0x80000000:
+                        result = (dst_val >> shift_amount) | ((0xFFFFFFFF << (32 - shift_amount)) & 0xFFFFFFFF)
                     else:
                         result = dst_val >> shift_amount
                 elif cmd == "LSR":
