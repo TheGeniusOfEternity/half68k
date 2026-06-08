@@ -133,8 +133,8 @@ def test_forward_label() -> None:
     lines = [".code", ".org 0x1000", "jmp end", "end:", "die"]
     parser = Parser(lines)
     program = parser.parse()
-    # jmp end: end address = 0x1002 (jmp takes 2 words)
-    assert program.code[0].words[1] == 0x1002
+    # jmp end: end address = 0x1008 (jmp takes 2 words = 8 bytes)
+    assert program.code[0].words[1] == 0x1008
 
 
 if __name__ == "__main__":
