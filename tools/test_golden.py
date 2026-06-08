@@ -17,7 +17,7 @@ def load_golden_tests() -> list[dict[str, Any]]:
     tests = []
     golden_dir = Path(__file__).parent.parent / "golden"
     for yaml_file in sorted(golden_dir.glob("*.yml")):
-        with Path.open(yaml_file, encoding="utf-8") as f:
+        with yaml_file.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
         data["name"] = yaml_file.stem
         tests.append(data)
